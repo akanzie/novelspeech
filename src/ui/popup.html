@@ -14,9 +14,18 @@
             <span id="status">Sẵn sàng</span>
         </div>
 
+        <div id="errorBox" class="error-box" style="display: none;">
+            <div class="error-header">
+                <span>❌ Lỗi gần đây</span>
+                <button id="closeErrorBtn" class="close-btn">×</button>
+            </div>
+            <div id="errorContent" class="error-content"></div>
+        </div>
+
         <div class="control-group">
             <button id="startBtn" class="btn btn-primary">▶️ Bắt Đầu</button>
             <button id="stopBtn" class="btn btn-danger" disabled>⏹️ Dừng</button>
+            <button id="logBtn" class="btn btn-info" title="Xem log debug">📋 Log</button>
         </div>
 
         <div class="control-group">

@@ -1,39 +1,52 @@
-# 📖 Truyện Nói - Chrome Extension
+# 📖 Truyện Nói - Chrome Extension v1.1.0
 
-Đọc nội dung truyện web tự động bằng Web Speech API. Hỗ trợ highlight realtime, điều chỉnh tốc độ/cao độ/âm lượng, tự động chuyển chương.
+Đọc nội dung truyện web tự động bằng TTS. Hỗ trợ **Web Speech API** & **Microsoft Edge TTS**. Highlight realtime, điều chỉnh tốc độ/cao độ/âm lượng, tự động chuyển chương.
+
+## 🆕 Có Gì Mới trong v1.1.0?
+
+- ✨ **Microsoft Edge TTS** - Auto-detect & fallback
+- 🏗️ **Modular Architecture** - 5 modules riêng biệt
+- 🔍 **15+ Content Selectors** - Hỗ trợ thêm websites
+- 🔗 **7 URL Patterns** - Flexible chapter navigation
+- ⚡ **Logger Batch Optimization** - 90% ít messages hơn
+- 🔒 **Security Hardening** - Restrict permissions
+
+[→ Xem chi tiết v1.1.0 CHANGELOG](docs/CHANGELOG-v1.1.0.md)
 
 ## 📁 Project Structure
 
 ```
-My Extension/
-├── 📄 manifest.json              # Extension configuration
+novelspeech/
+├── 📄 manifest.json              # v1.1.0 configuration
 ├── 📄 README.md                  # This file
 │
-├── 📁 src/                       # Source code
+├── 📁 src/
 │   ├── 📁 core/
-│   │   └── content.js            # Main TTS engine & content extraction
+│   │   ├── tts-engine.js         # TTS + Edge support
+│   │   ├── content-extractor.js  # Smart extraction (15+ selectors)
+│   │   ├── chapter-navigator.js  # URL navigation (7 patterns)
+│   │   ├── highlight-manager.js  # Highlight control
+│   │   ├── content-v2.js         # Main controller (modular)
+│   │   └── content.js            # [Deprecated] Old version
 │   │
 │   ├── 📁 ui/
-│   │   ├── popup.html            # Extension popup interface
-│   │   ├── popup.js              # Popup logic & messaging
+│   │   ├── popup.html            # Extension popup
+│   │   ├── popup.js              # Popup logic
 │   │   └── popup.css             # Popup styling
 │   │
 │   ├── 📁 logger/
-│   │   ├── logger.js             # Logger class with persistence
+│   │   ├── logger.js             # Logger (batched + async)
 │   │   ├── debug.html            # Debug UI
 │   │   └── debug.js              # Debug controller
 │   │
 │   └── 📁 background/
 │       └── background.js         # Service worker
 │
-└── 📁 docs/                      # Documentation
+└── 📁 docs/
+    ├── CHANGELOG-v1.1.0.md       # Detailed v1.1.0 changes
     ├── QUICKSTART.md             # Quick start guide
     ├── TEST_GUIDE.md             # Testing guide
-    ├── CHANGELOG.md              # Version history
-    ├── SUMMARY.md                # Project summary
-    ├── PROJECT_STRUCTURE.md      # File descriptions
-    ├── COMPLETION.md             # Completion status
-    └── INDEX.md                  # Documentation index
+    └── ... (other docs)
 ```
 
 ## 🚀 Quick Start
@@ -42,42 +55,58 @@ My Extension/
 1. `chrome://extensions` → Enable Developer Mode
 2. Click "Load unpacked"
 3. Select this folder
-4. Done! Extension appears in toolbar
+4. Reload extension
 
 ### Use
-1. Open any webpage with content
+1. Open webpage with content
 2. Click extension icon
 3. Click "▶️ Bắt Đầu" to start reading
 4. Adjust speed/pitch/volume as needed
-5. Use "⬅️ Chương Trước" / "Chương Tiếp ➡️" to navigate
+5. Use chapter navigation buttons
 
 ### Debug
-- Open debug page: `chrome-extension://[ID]/src/logger/debug.html`
-- Or click "🐛 Xem Log" in popup
-- View real-time logs and statistics
+- Click "🐛 Xem Log" in popup
+- Or open debug page directly: `chrome-extension://[ID]/src/logger/debug.html`
+- View real-time logs with batch optimization
 
 ## 🎯 Features
 
-✅ **Text-to-Speech**
-- Web Speech API (free, no API keys)
+✅ **Text-to-Speech (Dual Engine)**
+- **Web Speech API** - Standard, widely supported
+- **Microsoft Edge TTS** - Better quality on Edge browser
+- Auto-detect & fallback mechanism
 - Vietnamese voice auto-detection
 - Speed: 0.5x - 2.0x
 - Pitch: 0.5 - 2.0
 - Volume: 0% - 100%
 
-✅ **Content Extraction**
+✅ **Smart Content Extraction**
+- 15+ selectors for different websites
 - Auto-detect chapter content
 - Start from paragraph 2 (skip title)
 - Stop at "-----" delimiter
-- Multiple selector fallbacks
+- Custom selector support
+- Multiple fallback patterns
 
-✅ **Navigation**
+✅ **Flexible Navigation**
+- 7 URL patterns supported
 - Previous/Next chapter buttons
 - Auto-navigate after completion
-- URL pattern matching (chuong-N)
+- Works with: metruyencv.com, c1.html, p1.html, /123/, etc.
 
-✅ **Logging & Debug**
-- Persistent log storage
+✅ **Advanced Logging & Debug**
+- Persistent log storage (chrome.storage.local)
+- Batch notifications (200ms debounce)
+- Real-time debug UI with stats
+- Download/Copy/Clear logs
+- Only display 100 latest logs (memory optimization)
+
+✅ **Highlight & Scroll**
+- Real-time highlight during reading
+- Auto-scroll to reading position
+- Smooth animations
+- Customizable colors
+
 - Real-time debug UI
 - Download/Copy/Clear logs
 - Stats (total, errors, warnings, success)

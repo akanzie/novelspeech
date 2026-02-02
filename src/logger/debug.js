@@ -1,21 +1,12 @@
-// Tải log từ storage
-async function loadLogs() {
-    try {
-        const result = await chrome.storage.local.get(['logs']);
-        return result.logs || [];
-    } catch (err) {
-        console.error('Lỗi tải log:', err);
-        return [];
-    }
-}
+// Biến toàn cục để lưu logs hiện tại
+let currentLogs = [];
 
-// Hiển thị log
+// Hiển thị log (realtime)
 async function displayLogs() {
-    const logs = await loadLogs();
     const container = document.getElementById('logContainer');
     const statsContainer = document.getElementById('stats');
 
-    if (logs.length === 0) {
+    if (currentLogs.length === 0) {
         container.innerHTML = '<div class="empty-message">Chưa có log nào...</div>';
         statsContainer.innerHTML = '';
         return;
@@ -23,10 +14,11 @@ async function displayLogs() {
 
     // Thống kê
     const stats = {
-        total: logs.length,
-        errors: logs.filter(l => l.level === 'error').length,
-        warnings: logs.filter(l => l.level === 'warning').length,
-        success: logs.filter(l => l.level === 'success').length
+        total: currentLogs.length,
+        errors: currentLogs.filter(l => l.level === 'error').length,
+        warnings: currentLogs.filter(l => l.level === 'warning').length,
+        success: currentLogs.filter(l => l.level === 'success').length,
+        info: currentLogs.filter(l => l.level === 'info').length
     };
 
     statsContainer.innerHTML = `
@@ -46,10 +38,14 @@ async function displayLogs() {
             <div class="stat-value" style="color: #68d391;">${stats.success}</div>
             <div class="stat-label">Thành công</div>
         </div>
+        <div class="stat-item">
+            <div class="stat-value" style="color: #4a90e2;">${stats.info}</div>
+            <div class="stat-label">Thông tin</div>
+        </div>
     `;
 
     // Hiển thị log (mới nhất ở dưới)
-    const logsHTML = logs
+    const logsHTML = currentLogs
         .map(log => {
             let levelClass = log.level;
             let emoji = {
@@ -76,16 +72,15 @@ async function displayLogs() {
     container.scrollTop = container.scrollHeight;
 }
 
-// Làm mới log
-function refreshLogs() {
-    displayLogs();
-    console.log('🔄 Làm mới log');
-}
+// Tải log khi trang mở (realtime only)
+displayLogs();
+
+// Tải lại log mỗi 500ms (realtime)
+setInterval(displayLogs, 500);
 
 // Tải log
 async function downloadLogs() {
-    const logs = await loadLogs();
-    const content = logs
+    const content = currentLogs
         .map(log => `[${log.timestamp}] [${log.level.toUpperCase()}] ${log.message}`)
         .join('\n');
 
@@ -101,8 +96,7 @@ async function downloadLogs() {
 
 // Copy log vào clipboard
 async function copyToClipboard() {
-    const logs = await loadLogs();
-    const content = logs
+    const content = currentLogs
         .map(log => `[${log.timestamp}] [${log.level.toUpperCase()}] ${log.message}`)
         .join('\n');
 
@@ -123,7 +117,7 @@ async function clearLogs() {
     }
 
     try {
-        await chrome.storage.local.remove(['logs', 'lastUpdated']);
+        currentLogs = [];
         displayLogs();
         console.log('🗑️ Đã xóa toàn bộ log');
     } catch (err) {
@@ -139,15 +133,10 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
-// Lắng nghe cập nhật log real-time
+// Lắng nghe cập nhật log real-time từ content script
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'logsUpdated') {
+        currentLogs = request.logs || [];
         displayLogs();
     }
 });
-
-// Tải log khi trang mở
-displayLogs();
-
-// Làm mới log mỗi 2 giây
-setInterval(refreshLogs, 2000);

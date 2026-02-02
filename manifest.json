@@ -1,0 +1,37 @@
+{
+  "manifest_version": 3,
+  "name": "Truyện Nói - Đọc Truyện Tự Động",
+  "version": "1.0.3",
+  "description": "Đọc nội dung truyện web tự động và chuyển chương khi gặp dấu -----",
+  "permissions": [
+    "scripting",
+    "activeTab",
+    "tabs",
+    "webRequest",
+    "storage"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "action": {
+    "default_popup": "src/ui/popup.html",
+    "default_title": "Truyện Nói"
+  },
+  "background": {
+    "service_worker": "src/background/background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["src/logger/logger.js", "src/core/content.js"],
+      "run_at": "document_start"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["src/logger/debug.html", "src/logger/debug.js"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}
+

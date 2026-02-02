@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Truyện Nói</title>
+    <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+    <div class="container">
+        <h1>📖 Truyện Nói</h1>
+        
+        <div class="status-bar">
+            <span id="status">Sẵn sàng</span>
+        </div>
+
+        <div class="control-group">
+            <button id="startBtn" class="btn btn-primary">▶️ Bắt Đầu</button>
+            <button id="stopBtn" class="btn btn-danger" disabled>⏹️ Dừng</button>
+        </div>
+
+        <div class="control-group">
+            <button id="prevBtn" class="btn btn-secondary" title="Chương trước">⬅️ Chương Trước</button>
+            <button id="nextBtn" class="btn btn-secondary" title="Chương tiếp theo">Chương Tiếp ➡️</button>
+        </div>
+
+        <div class="control-group">
+            <label for="speedSlider">Tốc độ:</label>
+            <input type="range" id="speedSlider" min="0.5" max="2" step="0.1" value="1" class="slider">
+            <span id="speedValue">1.0x</span>
+        </div>
+
+        <div class="control-group">
+            <label for="pitchSlider">Cao độ:</label>
+            <input type="range" id="pitchSlider" min="0.5" max="2" step="0.1" value="1" class="slider">
+            <span id="pitchValue">1.0</span>
+        </div>
+
+        <div class="control-group">
+            <label for="voiceSelect">Giọng nói:</label>
+            <select id="voiceSelect" class="select">
+                <option value="default">Mặc định</option>
+            </select>
+        </div>
+
+        <div class="control-group">
+            <label for="volumeSlider">Âm lượng:</label>
+            <input type="range" id="volumeSlider" min="0" max="100" step="5" value="100" class="slider">
+            <span id="volumeValue">100%</span>
+        </div>
+
+        <div class="info-box">
+            <p>✓ Tự động bắt đầu từ chương thứ 2</p>
+            <p>✓ Tự động chuyển chương khi gặp "-----"</p>
+            <p>✓ Kiểm soát tốc độ, cao độ, âm lượng</p>
+        </div>
+    </div>
+
+    <script src="../logger/logger.js"></script>
+    <script src="popup.js"></script>
+</body>
+</html>

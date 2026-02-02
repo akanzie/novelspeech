@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🐛 Truyện Nói - Debug Log</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Courier New', monospace;
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 16px;
+            line-height: 1.5;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            color: #667eea;
+            margin-bottom: 16px;
+            font-size: 24px;
+        }
+
+        .controls {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            background: #667eea;
+            color: white;
+            cursor: pointer;
+            font-weight: 600;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            transition: all 0.3s ease;
+        }
+
+        button:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+        }
+
+        button.danger {
+            background: #f56565;
+        }
+
+        button.danger:hover {
+            background: #e53e3e;
+        }
+
+        .log-container {
+            background: #252526;
+            border: 1px solid #3e3e42;
+            border-radius: 4px;
+            padding: 12px;
+            max-height: 600px;
+            overflow-y: auto;
+            margin-bottom: 16px;
+        }
+
+        .log-entry {
+            margin-bottom: 8px;
+            padding: 8px;
+            border-left: 3px solid #667eea;
+            background: #1e1e1e;
+        }
+
+        .log-entry.error {
+            border-left-color: #f56565;
+            color: #ff6b6b;
+        }
+
+        .log-entry.warning {
+            border-left-color: #f6ad55;
+            color: #ffa94d;
+        }
+
+        .log-entry.success {
+            border-left-color: #48bb78;
+            color: #68d391;
+        }
+
+        .log-entry.info {
+            border-left-color: #4299e1;
+            color: #63b3ed;
+        }
+
+        .log-time {
+            color: #858585;
+            font-size: 12px;
+        }
+
+        .log-message {
+            word-break: break-all;
+            margin-top: 4px;
+        }
+
+        .stats {
+            background: #252526;
+            border: 1px solid #3e3e42;
+            border-radius: 4px;
+            padding: 12px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: #858585;
+            margin-top: 4px;
+        }
+
+        .empty-message {
+            color: #858585;
+            text-align: center;
+            padding: 32px;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🐛 Truyện Nói - Debug Log</h1>
+
+        <div class="controls">
+            <button onclick="refreshLogs()">🔄 Làm mới</button>
+            <button onclick="downloadLogs()">📥 Tải Log</button>
+            <button onclick="copyToClipboard()">📋 Copy</button>
+            <button class="danger" onclick="clearLogs()">🗑️ Xóa toàn bộ</button>
+        </div>
+
+        <div class="stats" id="stats"></div>
+
+        <div class="log-container" id="logContainer">
+            <div class="empty-message">Chưa có log nào...</div>
+        </div>
+    </div>
+
+    <script src="debug.js"></script>
+</body>
+</html>

@@ -1,0 +1,28 @@
+# Chrome Extension Files
+# Logs and temporary files
+*.log
+*.txt
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Node (if added in future)
+node_modules/
+package-lock.json
+
+# Old structure (before refactor)
+content.js
+popup.js
+popup.html
+popup.css
+logger.js
+background.js
+debug.html
+debug.js

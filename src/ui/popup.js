@@ -12,10 +12,10 @@ async function sendToContentScript(message) {
             addError(msg);
             return;
         }
-        
+
         currentTab = tab;
         logger.log('📤 Gửi tin nhắn: ' + message.action);
-        
+
         try {
             const response = await chrome.tabs.sendMessage(tab.id, message);
             if (response && response.success) {
@@ -25,23 +25,23 @@ async function sendToContentScript(message) {
         } catch (error) {
             logger.error('❌ Lỗi kết nối: ' + error.message);
             addError('Lỗi kết nối: ' + error.message);
-            
-            if (error.message.includes('Could not establish connection') || 
+
+            if (error.message.includes('Could not establish connection') ||
                 error.message.includes('Receiving end does not exist')) {
                 updateStatusDisplay('⏳ Đang khởi tạo...');
                 logger.warn('⚠️ Content script chưa được inject, đang inject...');
-                
+
                 try {
                     await chrome.scripting.executeScript({
                         target: { tabId: tab.id },
                         files: ['src/logger/logger.js', 'src/core/tts-engine.js', 'src/core/content-extractor.js', 'src/core/chapter-navigator.js', 'src/core/highlight-manager.js', 'src/core/content-v2.js']
                     });
-                    
+
                     logger.success('✓ Content script đã được inject');
                     updateStatusDisplay('⏳ Kết nối...');
                     addError('Đang khởi tạo các module...');
                     await new Promise(resolve => setTimeout(resolve, 500));
-                    
+
                     const retryResponse = await chrome.tabs.sendMessage(tab.id, message);
                     logger.success('✓ Nhận phản hồi sau inject');
                     updateStatusDisplay('✓ Sẵn sàng');
@@ -103,17 +103,17 @@ function displayErrors() {
         clearErrors();
         return;
     }
-    
+
     const errorBox = document.getElementById('errorBox');
     const errorContent = document.getElementById('errorContent');
-    
+
     errorContent.innerHTML = lastErrors.map(err => `
         <div class="error-item">
             <div>${err.message}</div>
             <div class="error-time">${err.timestamp}</div>
         </div>
     `).join('');
-    
+
     errorBox.style.display = 'block';
 }
 
@@ -176,13 +176,13 @@ document.getElementById('speedSlider').addEventListener('input', (e) => {
     document.getElementById('speedValue').textContent = speed.toFixed(1) + 'x';
     logger.log('⚡ Tốc độ: ' + speed);
     sendToContentScript({ action: 'updateSpeed', value: speed });
-    
+
     // Lưu vào state
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
         if (tabs[0]) {
-            chrome.tabs.sendMessage(tabs[0].id, { 
-                action: 'saveState', 
-                updates: { speed } 
+            chrome.tabs.sendMessage(tabs[0].id, {
+                action: 'saveState',
+                updates: { speed }
             }).catch(() => {});
         }
     });
@@ -194,13 +194,13 @@ document.getElementById('pitchSlider').addEventListener('input', (e) => {
     document.getElementById('pitchValue').textContent = pitch.toFixed(1);
     logger.log('🎵 Cao độ: ' + pitch);
     sendToContentScript({ action: 'updatePitch', value: pitch });
-    
+
     // Lưu vào state
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
         if (tabs[0]) {
-            chrome.tabs.sendMessage(tabs[0].id, { 
-                action: 'saveState', 
-                updates: { pitch } 
+            chrome.tabs.sendMessage(tabs[0].id, {
+                action: 'saveState',
+                updates: { pitch }
             }).catch(() => {});
         }
     });
@@ -212,13 +212,13 @@ document.getElementById('volumeSlider').addEventListener('input', (e) => {
     document.getElementById('volumeValue').textContent = e.target.value + '%';
     logger.log('🔊 Âm lượng: ' + e.target.value + '%');
     sendToContentScript({ action: 'updateVolume', value: volume });
-    
+
     // Lưu vào state
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
         if (tabs[0]) {
-            chrome.tabs.sendMessage(tabs[0].id, { 
-                action: 'saveState', 
-                updates: { volume } 
+            chrome.tabs.sendMessage(tabs[0].id, {
+                action: 'saveState',
+                updates: { volume }
             }).catch(() => {});
         }
     });
@@ -228,13 +228,13 @@ document.getElementById('volumeSlider').addEventListener('input', (e) => {
 document.getElementById('voiceSelect').addEventListener('change', (e) => {
     logger.log('🎤 Giọng nói: ' + e.target.value);
     sendToContentScript({ action: 'updateVoice', value: e.target.value });
-    
+
     // Lưu vào state
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
         if (tabs[0]) {
-            chrome.tabs.sendMessage(tabs[0].id, { 
-                action: 'saveState', 
-                updates: { voice: e.target.value } 
+            chrome.tabs.sendMessage(tabs[0].id, {
+                action: 'saveState',
+                updates: { voice: e.target.value }
             }).catch(() => {});
         }
     });
@@ -259,37 +259,37 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('📖 Popup đã tải xong');
     updateStatusDisplay('✓ Sẵn sàng');
-    
+
     // Khôi phục trạng thái TTS settings
     chrome.storage.local.get(['novelSpeechState'], (result) => {
         if (result.novelSpeechState) {
             const state = result.novelSpeechState;
             logger.log('📝 Khôi phục cài đặt TTS từ lần trước');
-            
+
             // Khôi phục tốc độ
             if (state.speed) {
                 document.getElementById('speedSlider').value = state.speed;
                 document.getElementById('speedValue').textContent = state.speed.toFixed(1) + 'x';
             }
-            
+
             // Khôi phục cao độ
             if (state.pitch) {
                 document.getElementById('pitchSlider').value = state.pitch;
                 document.getElementById('pitchValue').textContent = state.pitch.toFixed(1);
             }
-            
+
             // Khôi phục âm lượng
             if (state.volume) {
                 const volumePercent = Math.round(state.volume * 100);
                 document.getElementById('volumeSlider').value = volumePercent;
                 document.getElementById('volumeValue').textContent = volumePercent + '%';
             }
-            
+
             // Khôi phục giọng nói
             if (state.voice) {
                 document.getElementById('voiceSelect').value = state.voice;
             }
-            
+
             logger.success('✓ Cài đặt đã khôi phục');
         }
     });

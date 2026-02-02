@@ -48,26 +48,26 @@ window.postMessage({ type: 'CONTENT_SCRIPT_READY' }, '*');
 function updateVoiceList() {
     const voices = window.speechSynthesis.getVoices();
     logger.log(`🎤 Tổng giọng nói: ${voices.length}`);
-    
+
     // Tìm giọng Việt
     let vietnameseVoiceIndex = -1;
     let defaultVoiceIndex = 0;
-    
+
     voices.forEach((voice, index) => {
         logger.log(`   [${index}] ${voice.name} (${voice.lang})`);
-        
+
         // Ưu tiên tìm giọng Việt
         if (voice.lang.includes('vi') || voice.name.toLowerCase().includes('vietnamese')) {
             vietnameseVoiceIndex = index;
             logger.success(`   ✓ Tìm thấy giọng Việt: ${voice.name}`);
         }
-        
+
         // Giữ giọng mặc định
         if (voice.default) {
             defaultVoiceIndex = index;
         }
     });
-    
+
     // Nếu có giọng Việt, sử dụng nó
     if (vietnameseVoiceIndex !== -1) {
         readerState.voice = vietnameseVoiceIndex;
@@ -91,13 +91,13 @@ function extractContent() {
     try {
         logger.log('📖 Trích xuất nội dung...');
         let bodyText = '';
-        
+
         // Phương pháp 1: Tìm div nội dung chính
         let contentDiv = document.querySelector('#chapter-content') || 
                         document.querySelector('[class*="chapter"]') ||
                         document.querySelector('[class*="content"]') ||
                         document.querySelector('main');
-        
+
         if (contentDiv) {
             logger.log(`✓ Tìm thấy div nội dung: ${contentDiv.className}`);
             bodyText = contentDiv.innerText || contentDiv.textContent;
@@ -105,41 +105,41 @@ function extractContent() {
             logger.warn('⚠ Không tìm thấy div, sử dụng body');
             bodyText = document.body.innerText || document.body.textContent;
         }
-        
+
         if (!bodyText || bodyText.trim().length < 50) {
             logger.error('❌ Nội dung quá ngắn hoặc trống');
             throw new Error('Nội dung quá ngắn hoặc không có văn bản');
         }
-        
+
         const lines = bodyText.split('\n')
             .map(line => line.trim())
             .filter(line => line.length > 0);
-        
+
         logger.log(`📊 Tổng dòng: ${lines.length}`);
         logger.log(`📄 Dòng đầu tiên: ${lines[0].substring(0, 50)}...`);
-        
+
         if (lines.length < 2) {
             throw new Error('Không đủ nội dung để đọc');
         }
-        
+
         const startIndex = 1;
         let contentText = '';
-        
+
         for (let i = startIndex; i < lines.length; i++) {
             const line = lines[i];
-            
+
             if (line.includes('-----')) {
                 logger.log(`🔚 Tìm thấy dấu ---- tại dòng ${i}`);
                 break;
             }
-            
+
             contentText += line + ' ';
         }
-        
+
         if (contentText.trim().length === 0) {
             throw new Error('Nội dung trống sau chương thứ 2');
         }
-        
+
         logger.success(`✓ Nội dung được lấy: ${contentText.substring(0, 100)}...`);
         logger.log(`📏 Độ dài nội dung: ${contentText.length}`);
         return contentText;
@@ -153,14 +153,14 @@ function extractContent() {
 function goToNextChapter() {
     const currentUrl = window.location.href;
     logger.log(`🔗 URL hiện tại: ${currentUrl}`);
-    
+
     const match = currentUrl.match(/chuong-(\d+)/i);
-    
+
     if (match) {
         const currentChapter = parseInt(match[1]);
         const nextChapter = currentChapter + 1;
         const nextUrl = currentUrl.replace(/chuong-\d+/i, `chuong-${nextChapter}`);
-        
+
         logger.success(`➡️  Chuyển từ chương ${currentChapter} sang ${nextChapter}`);
         logger.log(`🌐 URL mới: ${nextUrl}`);
         window.location.href = nextUrl;
@@ -173,9 +173,9 @@ function goToNextChapter() {
 function goToPreviousChapter() {
     const currentUrl = window.location.href;
     logger.log(`🔗 URL hiện tại: ${currentUrl}`);
-    
+
     const match = currentUrl.match(/chuong-(\d+)/i);
-    
+
     if (match) {
         const currentChapter = parseInt(match[1]);
         if (currentChapter <= 1) {
@@ -185,7 +185,7 @@ function goToPreviousChapter() {
         }
         const previousChapter = currentChapter - 1;
         const previousUrl = currentUrl.replace(/chuong-\d+/i, `chuong-${previousChapter}`);
-        
+
         logger.success(`⬅️  Chuyển từ chương ${currentChapter} sang ${previousChapter}`);
         logger.log(`🌐 URL mới: ${previousUrl}`);
         window.location.href = previousUrl;
@@ -200,35 +200,35 @@ function speak(text) {
         logger.error('❌ Nội dung trống');
         return;
     }
-    
+
     window.speechSynthesis.cancel();
     clearHighlight();
-    
+
     // Tách thành câu/đoạn để highlight realtime
     const sentences = text.split(/([.!?।।।।])/).filter(s => s.trim().length > 0);
-    
+
     // Tạo element để highlight
     const contentDiv = document.querySelector('#chapter-content') || document.body;
     let highlightSpans = [];
-    
+
     // Tìm và wrap các câu trong text
     let remainingText = text;
     sentences.forEach((sentence, index) => {
         if (sentence.match(/[.!?।।।।]/)) return;
-        
+
         const span = document.createElement('span');
         span.className = 'tts-highlight-segment';
         span.textContent = sentence + ' ';
         span.dataset.index = index;
         highlightSpans.push(span);
     });
-    
+
     const utterance = new SpeechSynthesisUtterance(text);
-    
+
     utterance.rate = readerState.speed;
     utterance.pitch = readerState.pitch;
     utterance.volume = readerState.volume;
-    
+
     const voices = window.speechSynthesis.getVoices();
     if (readerState.voice !== null && voices[readerState.voice]) {
         utterance.voice = voices[readerState.voice];
@@ -243,7 +243,7 @@ function speak(text) {
             logger.warn(`⚠️ Không có giọng Việt, dùng giọng mặc định`);
         }
     }
-    
+
     // Track vị trí đang đọc
     utterance.onboundary = (event) => {
         if (event.name === 'sentence') {
@@ -259,12 +259,12 @@ function speak(text) {
             });
         }
     };
-    
+
     utterance.onstart = () => {
         logger.log('🎙️  Bắt đầu đọc...');
         isReading = true;
     };
-    
+
     utterance.onend = () => {
         logger.success('✓ Hoàn thành đọc');
         isReading = false;
@@ -274,14 +274,14 @@ function speak(text) {
             goToNextChapter();
         }, 1500);
     };
-    
+
     utterance.onerror = (event) => {
         logger.error(`❌ Lỗi đọc: ${event.error}`);
         updateStatus(`❌ Lỗi: ${event.error}`);
         isReading = false;
         clearHighlight();
     };
-    
+
     currentUtterance = utterance;
     logger.log('🚀 Bắt đầu nói...');
     window.speechSynthesis.speak(utterance);
@@ -308,13 +308,13 @@ function startReading() {
     try {
         logger.log('🎬 Bắt đầu đọc...');
         const content = extractContent();
-        
+
         if (!content || !content.trim()) {
             updateStatus('❌ Không tìm thấy nội dung để đọc');
             logger.error('Nội dung trống');
             return;
         }
-        
+
         logger.success('✓ Bắt đầu đọc nội dung...');
         speak(content);
     } catch (error) {
@@ -335,7 +335,7 @@ function stopReading() {
 // Gửi hành động từ content script
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     logger.log(`📨 Nhận lệnh: ${request.action}`);
-    
+
     switch (request.action) {
         case 'start':
             startReading();

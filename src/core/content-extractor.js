@@ -147,7 +147,7 @@ class ContentExtractor {
             // Xử lý cắt dòng & lọc nội dung rác (menu, links...)
             let lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
             logger.log(`📈 Tổng dòng ban đầu: ${lines.length}`);
-            
+
             // Lọc các dòng menu/author nếu cần
             text = this.removeMenuItems(lines.join('\n'));
             lines = text.split('\n').filter(l => l.length > 0);
@@ -220,7 +220,7 @@ class ContentExtractor {
     // Lấy text từ element (loại script/style)
     getTextFromElement(element) {
         if (!element) return '';
-        
+
         // Sao chép element để không ảnh hưởng DOM gốc
         const clone = element.cloneNode(true);
 

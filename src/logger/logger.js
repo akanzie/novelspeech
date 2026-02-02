@@ -24,7 +24,7 @@ class Logger {
 
         // Notify debug page realtime (không cần lưu storage)
         this.notifyDebugPage();
-        
+
         // In console luôn
         console.log(`[${timestamp}] [${level.toUpperCase()}]`, message);
     }

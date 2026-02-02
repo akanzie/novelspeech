@@ -9,7 +9,7 @@ class TTSEngine {
         this.isReading = false;
         this.currentUtterance = null;
         this.currentText = '';
-        
+
         // Trạng thái
         this.state = {
             speed: 1,
@@ -25,7 +25,7 @@ class TTSEngine {
     // Phát hiện TTS provider khả dụng
     detectProviders() {
         logger.log('🔍 Phát hiện TTS providers...');
-        
+
         // Web Speech API (mặc định)
         if ('speechSynthesis' in window) {
             logger.success('✓ Web Speech API khả dụng');
@@ -47,7 +47,7 @@ class TTSEngine {
             const isEdge = /Edg/.test(navigator.userAgent);
             const hasEdgeAPI = window.speechSynthesis && 
                               window.speechSynthesis.toString().includes('Microsoft');
-            
+
             if (isEdge && hasEdgeAPI) {
                 this.availableProviders.push('edge-tts');
                 logger.success('✓ Microsoft Edge TTS khả dụng');
@@ -61,11 +61,11 @@ class TTSEngine {
     // Lấy danh sách giọng nói
     getVoices() {
         logger.log(`🎤 Lấy danh sách giọng nói từ ${this.provider}`);
-        
+
         if (this.provider === 'edge-tts' || this.provider === 'web-speech') {
             const voices = window.speechSynthesis.getVoices();
             logger.log(`   Tổng giọng nói: ${voices.length}`);
-            
+
             // Tìm giọng Việt
             let vietnameseVoices = voices.filter(v => 
                 v.lang.includes('vi') || 
@@ -96,7 +96,7 @@ class TTSEngine {
     selectVoice(voiceIndex) {
         logger.log(`🎤 Chọn giọng: index ${voiceIndex}`);
         const voices = this.getVoices();
-        
+
         if (voiceIndex === 'default' || voiceIndex === null) {
             this.state.voice = null;
             logger.log('   Sẽ dùng giọng mặc định');
@@ -154,9 +154,9 @@ class TTSEngine {
     async _speakWebSpeech(text, options = {}) {
         try {
             window.speechSynthesis.cancel();
-            
+
             const utterance = new SpeechSynthesisUtterance(text);
-            
+
             // Cấu hình
             utterance.rate = this.state.speed;
             utterance.pitch = this.state.pitch;
@@ -170,8 +170,8 @@ class TTSEngine {
                 logger.log(`🎤 Dùng giọng: ${voices[this.state.voice].name}`);
             } else {
                 // Tìm giọng Việt mặc định
-                let vietnameseVoice = voices.find(v => 
-                    v.lang.includes('vi-VN') || 
+                let vietnameseVoice = voices.find(v =>
+                    v.lang.includes('vi-VN') ||
                     v.lang.includes('vi')
                 );
                 if (vietnameseVoice) {
@@ -186,7 +186,7 @@ class TTSEngine {
             utterance.onstart = () => {
                 this.isReading = true;
                 logger.log('🎙️ Bắt đầu đọc');
-                
+
                 // Highlight container đang đọc
                 if (window.highlightManager && window.contentExtractor) {
                     const container = document.querySelector('#chapter-content, .chapter-content, .break-words');
@@ -194,31 +194,31 @@ class TTSEngine {
                         window.highlightManager.highlight(container);
                     }
                 }
-                
+
                 if (options.onStart) options.onStart();
             };
 
             utterance.onend = () => {
                 this.isReading = false;
                 logger.success('✓ Hoàn thành đọc');
-                
+
                 // Xóa highlight
                 if (window.highlightManager) {
                     window.highlightManager.clear();
                 }
-                
+
                 if (options.onEnd) options.onEnd();
             };
 
             utterance.onerror = (event) => {
                 this.isReading = false;
                 logger.error(`❌ Lỗi: ${event.error}`);
-                
+
                 // Xóa highlight khi lỗi
                 if (window.highlightManager) {
                     window.highlightManager.clear();
                 }
-                
+
                 if (options.onError) options.onError(event.error);
             };
 

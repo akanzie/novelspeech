@@ -38,7 +38,7 @@ function extractContent() {
         logger.log('📖 Trích xuất nội dung...');
         logger.log(`🔗 Current URL: ${window.location.href}`);
         logger.log(`📄 Page title: ${document.title}`);
-        
+
         const result = contentExtractor.extract({
             startLine: 1,
             stopPatterns: ['-----', '---', '***']
@@ -55,7 +55,7 @@ function extractContent() {
         if (typeof contentExtractor !== 'undefined' && contentExtractor.debugPageStructure) {
             contentExtractor.debugPageStructure();
         }
-        
+
         const errorMsg = `Trích xuất lỗi: ${error.message}. Kiểm tra log để biết chi tiết.`;
         updateStatus(`❌ ${errorMsg}`);
         sendError(errorMsg);
@@ -81,7 +81,7 @@ function startReading() {
         }
 
         highlightManager.clear();
-        
+
         const options = {
             onStart: () => {
                 readerState.isReading = true;
@@ -91,7 +91,7 @@ function startReading() {
                 readerState.isReading = false;
                 highlightManager.fadeHighlight();
                 updateStatus('✓ Hoàn thành. Chuyển chương...');
-                
+
                 if (readerState.autoNavigate) {
                     setTimeout(() => {
                         chapterNavigator.goNext();
@@ -153,7 +153,7 @@ function goPreviousChapter() {
 function updateSpeed(speed) {
     logger.log(`⚡ Cập nhật tốc độ: ${speed}x`);
     ttsEngine.setSpeed(speed);
-    
+
     // Nếu đang đọc, restart
     if (readerState.isReading && readerState.currentContent) {
         stopReading();
@@ -164,7 +164,7 @@ function updateSpeed(speed) {
 function updatePitch(pitch) {
     logger.log(`🎵 Cập nhật cao độ: ${pitch}`);
     ttsEngine.setPitch(pitch);
-    
+
     if (readerState.isReading && readerState.currentContent) {
         stopReading();
         setTimeout(() => startReading(), 300);
@@ -179,7 +179,7 @@ function updateVolume(volume) {
 function updateVoice(voiceIndex) {
     logger.log(`🎤 Cập nhật giọng: ${voiceIndex}`);
     ttsEngine.selectVoice(voiceIndex);
-    
+
     if (readerState.isReading && readerState.currentContent) {
         stopReading();
         setTimeout(() => startReading(), 300);
@@ -192,7 +192,7 @@ function updateVoice(voiceIndex) {
 
 function updateStatus(message) {
     logger.log(`📢 Status: ${message}`);
-    
+
     try {
         chrome.runtime.sendMessage({
             action: 'updateStatus',
@@ -208,7 +208,7 @@ function updateStatus(message) {
 // Gửi lỗi đến popup
 function sendError(errorMessage) {
     logger.error(`🔴 Gửi lỗi: ${errorMessage}`);
-    
+
     try {
         chrome.runtime.sendMessage({
             action: 'errorOccurred',
@@ -227,7 +227,7 @@ function sendError(errorMessage) {
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     logger.log(`📨 Nhận lệnh: ${request.action}`);
-    
+
     try {
         switch (request.action) {
             case 'start':
@@ -272,8 +272,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
             case 'getVoices':
                 const voices = ttsEngine.getVoices();
-                sendResponse({ 
-                    success: true, 
+                sendResponse({
+                    success: true,
                     voices: voices.map((v, i) => ({
                         index: i,
                         name: v.name,
@@ -284,8 +284,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 break;
 
             case 'getProviderInfo':
-                sendResponse({ 
-                    success: true, 
+                sendResponse({
+                    success: true,
                     info: ttsEngine.getProviderInfo()
                 });
                 break;
@@ -339,12 +339,12 @@ const waitForModules = () => {
 
     logger.success('✅ Tất cả modules sẵn sàng');
     updateStatus('✓ Sẵn sàng');
-    
+
     // Hiển thị provider info
     const providerInfo = ttsEngine.getProviderInfo();
     logger.log(`📡 TTS Provider: ${providerInfo.current}`);
     logger.log(`   Available: ${providerInfo.available.join(', ')}`);
-    
+
     logger.success('✅ Content script khởi tạo hoàn toàn!');
 };
 

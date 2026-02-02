@@ -8,7 +8,7 @@ class HighlightManager {
         this.currentHighlight = null;
         this.highlightedElements = [];
         this.setupStyles();
-        
+
         logger.log('🎨 Highlight Manager khởi tạo');
     }
 
@@ -23,19 +23,19 @@ class HighlightManager {
                 transition: background-color 0.3s ease;
                 box-shadow: 0 0 8px rgba(255, 215, 0, 0.5);
             }
-            
+
             .tts-reading-container {
                 border-left: 4px solid #FFD700;
                 padding-left: 10px;
                 margin: 10px 0;
                 background-color: #FFFACD;
             }
-            
+
             .tts-highlight-fading {
                 opacity: 0.6;
             }
         `;
-        
+
         if (document.head) {
             document.head.appendChild(style);
             logger.log('✓ CSS styles đã thêm');
@@ -56,7 +56,7 @@ class HighlightManager {
                     behavior: 'smooth',
                     block: 'center'
                 });
-                
+
                 this.currentHighlight = element;
             }
         } catch (error) {
@@ -106,7 +106,7 @@ class HighlightManager {
 
             this.currentHighlight = null;
             this.highlightedElements = [];
-            
+
             logger.log('✓ Đã xóa highlight');
         } catch (error) {
             logger.warn('⚠️ Lỗi xóa highlight: ' + error.message);

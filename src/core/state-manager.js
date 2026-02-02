@@ -17,7 +17,7 @@ class StateManager {
             lastTab: null,
             lastUpdateTime: null
         };
-        
+
         logger.log('💾 State Manager khởi tạo');
         this.loadState();
     }
@@ -29,7 +29,7 @@ class StateManager {
                 ...this.state,
                 lastUpdateTime: Date.now()
             };
-            
+
             // Lưu vào chrome.storage
             chrome.storage.local.set({ 'novelSpeechState': stateData }, () => {
                 if (chrome.runtime.lastError) {
@@ -51,7 +51,7 @@ class StateManager {
                     const savedState = result.novelSpeechState;
                     // Chỉ khôi phục các trạng thái an toàn (không khôi phục content quá lâu)
                     const oneHourAgo = Date.now() - (60 * 60 * 1000);
-                    
+
                     if (savedState.lastUpdateTime > oneHourAgo) {
                         this.state = {
                             ...this.state,

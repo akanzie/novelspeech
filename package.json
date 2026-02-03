@@ -1,0 +1,17 @@
+{
+  "name": "story-reader-extension",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.js",
+    "dev": "nodemon scripts/build.js --watch",
+    "test": "jest",
+    "lint": "eslint .",
+    "pack": "node scripts/compress.js"
+  },
+  "devDependencies": {
+    "fs-extra": "^11.0.0",
+    "jest": "^29.0.0",
+    "eslint": "^8.0.0"
+  }
+}

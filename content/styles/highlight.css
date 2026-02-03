@@ -1,0 +1,126 @@
+/* Story Reader Content Styles */
+
+.story-reader-highlight {
+    background-color: rgba(255, 235, 59, 0.3) !important;
+    border-left: 3px solid #FF9800 !important;
+    padding-left: 10px !important;
+    transition: all 0.3s ease !important;
+    animation: pulse-highlight 2s infinite !important;
+}
+
+.story-reader-reading-line {
+    background-color: rgba(67, 97, 238, 0.15) !important;
+    border-left: 3px solid #4361ee !important;
+    padding-left: 10px !important;
+}
+
+@keyframes pulse-highlight {
+    0% {
+        background-color: rgba(255, 235, 59, 0.3);
+    }
+    50% {
+        background-color: rgba(255, 235, 59, 0.5);
+    }
+    100% {
+        background-color: rgba(255, 235, 59, 0.3);
+    }
+}
+
+/* Reading progress indicator */
+.story-reader-progress {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #4361ee, #7209b7);
+    z-index: 999999;
+    transition: width 0.3s ease;
+}
+
+/* OCR overlay */
+.story-reader-ocr-overlay {
+    position: absolute;
+    border: 2px dashed #4CAF50;
+    background-color: rgba(76, 175, 80, 0.1);
+    pointer-events: none;
+    z-index: 999998;
+}
+
+/* Canvas detection */
+.story-reader-canvas-detected {
+    outline: 2px solid #FF5722 !important;
+    outline-offset: 2px;
+    position: relative;
+}
+
+.story-reader-canvas-detected::after {
+    content: '🖼️ OCR Available';
+    position: absolute;
+    top: -25px;
+    right: 0;
+    background: #FF5722;
+    color: white;
+    padding: 2px 8px;
+    font-size: 11px;
+    border-radius: 4px;
+    z-index: 999999;
+}
+
+/* Content extraction marker */
+.story-reader-extracted {
+    opacity: 0.95;
+}
+
+/* Dark mode support for content */
+@media (prefers-color-scheme: dark) {
+    .story-reader-highlight {
+        background-color: rgba(255, 235, 59, 0.2) !important;
+        border-left-color: #FFB74D !important;
+    }
+    
+    .story-reader-reading-line {
+        background-color: rgba(67, 97, 238, 0.2) !important;
+    }
+}
+
+/* Loading animation for OCR */
+.story-reader-ocr-loading {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 20px 30px;
+    border-radius: 10px;
+    z-index: 999999;
+    display: none;
+    align-items: center;
+    gap: 15px;
+    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
+}
+
+.story-reader-ocr-loading.show {
+    display: flex;
+}
+
+.story-reader-ocr-loading .spinner {
+    width: 30px;
+    height: 30px;
+    border: 3px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    border-top-color: #4CAF50;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .story-reader-highlight {
+        padding-left: 5px !important;
+        border-left-width: 2px !important;
+    }
+}

@@ -1,0 +1,56 @@
+{
+  "manifest_version": 3,
+  "name": "NovelSpeech",
+  "version": "1.0.0",
+  "description": "Đọc truyện chữ bằng giọng nói với OCR và highlight",
+  "permissions": [
+    "activeTab",
+    "storage",
+    "scripting",
+    "sidePanel",
+    "tts"
+  ],
+  "host_permissions": [
+    "*://*/*"
+  ],
+  "background": {
+    "service_worker": "background/service-worker.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*/*"
+      ],
+      "js": [
+        "content/ContentExtractor.js",
+        "content/DOMController.js",
+        "content/content.js"
+      ],
+      "css": [
+        "content/styles/highlight.css"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "libs/tesseract/*",
+        "content/*",
+        "ui/*"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
+    }
+  ],
+  "action": {
+    "default_popup": "ui/popup/popup.html",
+    "default_title": "NovelSpeech"
+  },
+  "side_panel": {
+    "default_path": "ui/sidepanel/sidepanel.html"
+  },
+  "options_page": "ui/options/options.html"
+}

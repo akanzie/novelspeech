@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cài đặt - Story Reader</title>
+  <link rel="stylesheet" href="options.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+
+<body>
+  <div class="options-container">
+    <!-- Header -->
+    <header class="options-header">
+      <div class="header-content">
+        <div class="logo">
+          <i class="fas fa-book-reader"></i>
+          <h1>Cài đặt Story Reader</h1>
+        </div>
+        <nav class="nav-tabs" id="navTabs">
+          <button class="tab-btn active" data-tab="general">Tổng quan</button>
+          <button class="tab-btn" data-tab="tts">Giọng đọc</button>
+          <button class="tab-btn" data-tab="appearance">Giao diện</button>
+          <button class="tab-btn" data-tab="advanced">Nâng cao</button>
+        </nav>
+      </div>
+    </header>
+
+    <!-- Content -->
+    <main class="options-content">
+      <!-- General Tab -->
+      <section class="tab-content active" id="tab-general">
+        <h2><i class="fas fa-cog"></i> Cài đặt chung</h2>
+
+        <div class="settings-group">
+          <div class="setting-item">
+            <label>
+              <input type="checkbox" id="autoStart">
+              Tự động phát khi vào trang truyện
+            </label>
+            <p class="setting-description">Tự động bắt đầu đọc khi phát hiện nội dung chương truyện</p>
+          </div>
+
+          <div class="setting-item">
+            <label>
+              <input type="checkbox" id="autoNextChapter">
+              Tự động chuyển chương
+            </label>
+            <p class="setting-description">Tự động tải và đọc chương tiếp theo khi kết thúc chương hiện tại</p>
+          </div>
+
+          <div class="setting-item">
+            <label>
+              <input type="checkbox" id="saveHistory">
+              Lưu lịch sử đọc
+            </label>
+            <p class="setting-description">Lưu lại lịch sử các chương đã đọc</p>
+          </div>
+        </div>
+
+        <div class="settings-group">
+          <h3>Thời gian chờ</h3>
+          <div class="setting-item">
+            <label for="pageLoadTimeout">Thời gian chờ tải trang (giây)</label>
+            <input type="number" id="pageLoadTimeout" min="1" max="30" value="10">
+          </div>
+        </div>
+      </section>
+
+      <!-- TTS Tab -->
+      <section class="tab-content" id="tab-tts">
+        <h2><i class="fas fa-volume-up"></i> Cài đặt giọng đọc</h2>
+
+        <div class="settings-group">
+          <div class="setting-item">
+            <label for="ttsEngine">Công cụ TTS</label>
+            <select id="ttsEngine">
+              <option value="edge">Edge TTS (Mặc định)</option>
+              <option value="web_speech">Web Speech API</option>
+              <option value="custom">API tùy chỉnh</option>
+            </select>
+          </div>
+
+          <div class="setting-item">
+            <label for="defaultVoice">Giọng đọc mặc định</label>
+            <select id="defaultVoice">
+              <option value="vi-VN-HoaiMyNeural">Hồng My - Nữ miền Bắc</option>
+              <option value="vi-VN-NamMinhNeural">Minh Nam - Nam miền Bắc</option>
+              <option value="vi-VN-ThanhNamNeural">Thanh Nam - Nam miền Nam</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="settings-group">
+          <h3>Tốc độ & Cao độ</h3>
+          <div class="setting-sliders">
+            <div class="slider-item">
+              <label for="defaultSpeed">Tốc độ mặc định: <span id="speedValue">1.0</span>x</label>
+              <input type="range" id="defaultSpeed" min="0.5" max="2.0" step="0.1" value="1.0">
+            </div>
+            <div class="slider-item">
+              <label for="defaultPitch">Cao độ: <span id="pitchValue">1.0</span></label>
+              <input type="range" id="defaultPitch" min="0.5" max="1.5" step="0.1" value="1.0">
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Appearance Tab -->
+      <section class="tab-content" id="tab-appearance">
+        <h2><i class="fas fa-palette"></i> Giao diện</h2>
+
+        <div class="settings-group">
+          <h3>Chủ đề</h3>
+          <div class="theme-selector">
+            <div class="theme-option" data-theme="light">
+              <div class="theme-preview light"></div>
+              <span>Sáng</span>
+            </div>
+            <div class="theme-option" data-theme="dark">
+              <div class="theme-preview dark"></div>
+              <span>Tối</span>
+            </div>
+            <div class="theme-option" data-theme="auto">
+              <div class="theme-preview auto"></div>
+              <span>Tự động</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-group">
+          <h3>Highlight</h3>
+          <div class="setting-item">
+            <label for="highlightColor">Màu highlight</label>
+            <input type="color" id="highlightColor" value="#ffeb3b">
+          </div>
+          <div class="setting-item">
+            <label for="highlightOpacity">Độ trong suốt</label>
+            <input type="range" id="highlightOpacity" min="0.1" max="1.0" step="0.1" value="0.3">
+          </div>
+        </div>
+      </section>
+
+      <!-- Advanced Tab -->
+      <section class="tab-content" id="tab-advanced">
+        <h2><i class="fas fa-tools"></i> Nâng cao</h2>
+
+        <div class="settings-group">
+          <h3>OCR Settings</h3>
+          <div class="setting-item">
+            <label for="ocrLanguage">Ngôn ngữ OCR</label>
+            <select id="ocrLanguage">
+              <option value="vie">Tiếng Việt</option>
+              <option value="eng">Tiếng Anh</option>
+              <option value="chi_sim">Tiếng Trung (Giản thể)</option>
+            </select>
+          </div>
+          <div class="setting-item">
+            <label>
+              <input type="checkbox" id="cacheOCRResults">
+              Cache kết quả OCR
+            </label>
+            <p class="setting-description">Lưu kết quả OCR để tăng tốc độ xử lý</p>
+          </div>
+        </div>
+
+        <div class="settings-group">
+          <h3>Debug & Logs</h3>
+          <div class="setting-item">
+            <label>
+              <input type="checkbox" id="enableDebug">
+              Bật chế độ debug
+            </label>
+          </div>
+          <button class="btn" id="btnViewLogs">Xem logs</button>
+          <button class="btn btn-danger" id="btnClearData">Xóa dữ liệu</button>
+        </div>
+      </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="options-footer">
+      <button class="btn btn-primary" id="btnSave">Lưu cài đặt</button>
+      <button class="btn" id="btnReset">Đặt lại mặc định</button>
+      <button class="btn" id="btnClose">Đóng</button>
+    </footer>
+
+    <!-- Toast Notification -->
+    <div class="toast" id="toast">
+      <span id="toastMessage"></span>
+    </div>
+  </div>
+
+  <script src="options.js"></script>
+</body>
+
+</html>

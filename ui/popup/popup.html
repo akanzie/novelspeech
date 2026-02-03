@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NovelSpeech</title>
+  <link rel="stylesheet" href="popup.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <div class="logo">
+        <i class="fas fa-book-reader"></i>
+        <h1>Story Reader</h1>
+      </div>
+      <div class="status-badge" id="statusBadge">
+        <span class="status-dot"></span>
+        <span class="status-text">Đang chờ</span>
+      </div>
+    </div>
+
+    <!-- Thông tin chương -->
+    <div class="chapter-info" id="chapterInfo">
+      <div class="chapter-title">Chưa phát hiện chương truyện</div>
+      <div class="progress-container">
+        <div class="progress-bar">
+          <div class="progress-fill" id="progressFill"></div>
+        </div>
+        <div class="progress-text">
+          <span id="currentLine">0</span> / <span id="totalLines">0</span> dòng
+        </div>
+      </div>
+    </div>
+
+    <!-- Điều khiển chính -->
+    <div class="player-controls">
+      <button class="btn-control" id="btnPrev" title="Câu trước">
+        <i class="fas fa-step-backward"></i>
+      </button>
+      <button class="btn-control btn-play" id="btnPlayPause" title="Phát/Tạm dừng">
+        <i class="fas fa-play" id="playIcon"></i>
+      </button>
+      <button class="btn-control" id="btnNext" title="Câu tiếp">
+        <i class="fas fa-step-forward"></i>
+      </button>
+      <button class="btn-control" id="btnStop" title="Dừng">
+        <i class="fas fa-stop"></i>
+      </button>
+      <button class="btn-control" id="btnReload" title="Tải lại nội dung">
+        <i class="fas fa-redo"></i>
+      </button>
+    </div>
+
+    <!-- Cài đặt nhanh -->
+    <div class="quick-settings">
+      <div class="setting-group">
+        <label for="speedControl">
+          <i class="fas fa-tachometer-alt"></i>
+          <span>Tốc độ: <span id="speedValue">1.0</span>x</span>
+        </label>
+        <input type="range" id="speedControl" min="0.5" max="2.0" step="0.1" value="1.0">
+      </div>
+
+      <div class="setting-group">
+        <label for="volumeControl">
+          <i class="fas fa-volume-up"></i>
+          <span>Âm lượng: <span id="volumeValue">100</span>%</span>
+        </label>
+        <input type="range" id="volumeControl" min="0" max="100" value="100">
+      </div>
+
+      <div class="setting-group">
+        <label for="voiceSelect">
+          <i class="fas fa-user"></i>
+          <span>Giọng đọc</span>
+        </label>
+        <select id="voiceSelect">
+          <option value="vi-VN-HongMyNeural">Hồng My - Nữ miền Bắc</option>
+          <option value="vi-VN-NamMinhNeural">Minh Nam - Nam miền Bắc</option>
+          <option value="vi-VN-ThanhNamNeural">Thanh Nam - Nam miền Nam</option>
+          <option value="vi-VN-HoaiMyNeural">Hoài My - Nữ miền Nam</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Tính năng bổ sung -->
+    <div class="features">
+      <button class="btn-feature">
+        <i class="fas fa-arrow-down"></i>
+        <span>Tự động cuộn</span>
+        <div class="toggle-switch">
+          <input type="checkbox" id="autoScrollToggle" checked>
+          <label for="autoScrollToggle"></label>
+        </div>
+      </button>
+
+      <button class="btn-feature" id="btnHighlight">
+        <i class="fas fa-highlighter"></i>
+        <span>Highlight</span>
+        <div class="toggle-switch">
+          <input type="checkbox" id="highlightToggle" checked>
+          <label for="highlightToggle"></label>
+        </div>
+      </button>
+
+      <button class="btn-feature" id="btnDarkMode">
+        <i class="fas fa-moon"></i>
+        <span>Chế độ tối</span>
+        <div class="toggle-switch">
+          <input type="checkbox" id="darkModeToggle">
+          <label for="darkModeToggle"></label>
+        </div>
+      </button>
+    </div>
+
+    <!-- Menu chức năng -->
+    <div class="menu">
+      <button class="btn-menu" id="btnOpenSidepanel">
+        <i class="fas fa-columns"></i>
+        <span>Mở bảng điều khiển</span>
+      </button>
+      <button class="btn-menu" id="btnSettings">
+        <i class="fas fa-cog"></i>
+        <span>Cài đặt</span>
+      </button>
+      <button class="btn-menu" id="btnHelp">
+        <i class="fas fa-question-circle"></i>
+        <span>Trợ giúp</span>
+      </button>
+    </div>
+
+    <!-- Thông báo -->
+    <div class="notification" id="notification">
+      <span id="notificationMessage"></span>
+    </div>
+  </div>
+
+  <script src="../../utils/SharedServices.js"></script>
+  <!-- Load BaseUI second -->
+  <script src="../../utils/BaseUI.js"></script>
+  <!-- Load popup last -->
+  <script src="popup.js"></script>
+</body>
+
+</html>

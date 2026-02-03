@@ -26,6 +26,23 @@
     <!-- Thông tin chương -->
     <div class="chapter-info" id="chapterInfo">
       <div class="chapter-title">Chưa phát hiện chương truyện</div>
+      <div class="chapter-nav">
+        <button class="btn-chapter" id="btnPrevChapter" title="Chương trước">
+          <i class="fas fa-chevron-left"></i>
+          <span>Chương trước</span>
+        </button>
+        <button class="btn-chapter" id="btnNextChapter" title="Chương sau">
+          <span>Chương sau</span>
+          <i class="fas fa-chevron-right"></i>
+        </button>
+      </div>
+      <div class="chapter-actions">
+        <button class="btn-chapter btn-resume" id="btnResume" title="Khong co vi tri doc">
+          <i class="fas fa-play-circle"></i>
+          <span>Tiếp tục từ vị trí cũ</span>
+        </button>
+        <span class="resume-badge" id="resumeBadge">Resume</span>
+      </div>
       <div class="progress-container">
         <div class="progress-bar">
           <div class="progress-fill" id="progressFill"></div>
@@ -63,6 +80,14 @@
           <span>Tốc độ: <span id="speedValue">1.0</span>x</span>
         </label>
         <input type="range" id="speedControl" min="0.5" max="2.0" step="0.1" value="1.0">
+      </div>
+
+      <div class="setting-group">
+        <label for="pitchControl">
+          <i class="fas fa-sliders-h"></i>
+          <span>Cao độ: <span id="pitchValue">1.0</span>x</span>
+        </label>
+        <input type="range" id="pitchControl" min="0.5" max="2.0" step="0.1" value="1.0">
       </div>
 
       <div class="setting-group">
@@ -139,9 +164,12 @@
     </div>
   </div>
 
+  <script src="../../utils/constants.js"></script>
+  <script src="../../utils/LogService.js"></script>
+  <script src="../../utils/StorageService.js"></script>
   <script src="../../utils/SharedServices.js"></script>
   <!-- Load BaseUI second -->
-  <script src="../../utils/BaseUI.js"></script>
+  <script src="../BaseUI.js"></script>
   <!-- Load popup last -->
   <script src="popup.js"></script>
 </body>

@@ -1,25 +1,26 @@
-/**
+﻿/**
  * State Manager - Quản lý trạng thái đọc toàn cục của extension
  * Hỗ trợ lưu trữ persistent, tự động lưu, thông báo listener khi thay đổi,
  * tính toán thời gian đọc và lưu lịch sử đọc chương
  */
+
+import '../utils/constants.js';
+import '../utils/StorageService.js';
+
+const CONFIG = globalThis.NOVELSPEECH_CONFIG || {};
+const STATUS = CONFIG.READING_STATUS || {};
+const STORAGE = CONFIG.STORAGE_KEYS || {};
+const DEFAULT_RUNTIME_SETTINGS = CONFIG.DEFAULT_RUNTIME_SETTINGS || {};
 class StateManager {
   constructor() {
     this.state = {
-      status: 'stopped', // stopped, playing, paused, error, finished
+      status: STATUS.STOPPED || 'stopped', // stopped, playing, paused, error, finished
       chapterUrl: '',
       chapterTitle: '',
       currentLine: 0,
       totalLines: 0,
       content: [],
-      settings: {
-        rate: 1.0,
-        pitch: 1.0,
-        volume: 1.0,
-        voice: 'vi-VN-HoaiMyNeural',
-        autoScroll: true,
-        highlight: true
-      },
+      settings: { ...DEFAULT_RUNTIME_SETTINGS },
       metadata: {
         startTime: null,
         endTime: null,
@@ -56,9 +57,12 @@ class StateManager {
    */
   async loadFromStorage() {
     try {
-      const result = await chrome.storage.local.get(['readingState']);
-      if (result.readingState) {
-        this.state = this.deepMerge(this.state, result.readingState);
+      const storage = globalThis.StorageService;
+      const savedState = storage?.getReadingState
+        ? await storage.getReadingState()
+        : null;
+      if (savedState) {
+        this.state = this.deepMerge(this.state, savedState);
         this.logger?.log('Đã load state từ storage', { state: this.state });
       }
     } catch (error) {
@@ -71,7 +75,13 @@ class StateManager {
    */
   async saveToStorage() {
     try {
-      await chrome.storage.local.set({ readingState: this.state });
+      const storage = globalThis.StorageService;
+      if (storage?.setReadingState) {
+        await storage.setReadingState(this.state);
+      } else {
+        const key = STORAGE.READING_STATE || 'readingState';
+        await chrome.storage.local.set({ [key]: this.state });
+      }
       this.logger?.debug('Đã lưu state vào storage');
     } catch (error) {
       this.logger?.error('Lỗi lưu state vào storage', { error });
@@ -108,12 +118,14 @@ class StateManager {
     this.state = this.deepMerge(this.state, updates);
 
     // Cập nhật metadata thời gian đọc
-    if (updates.status === 'playing' && oldState.status !== 'playing') {
+    if (updates.status === (STATUS.PLAYING || 'playing') && oldState.status !== (STATUS.PLAYING || 'playing')) {
       this.state.metadata.startTime = Date.now();
     }
 
-    if ((updates.status === 'stopped' || updates.status === 'finished' || updates.status === 'error') &&
-        oldState.status === 'playing') {
+    if ((updates.status === (STATUS.STOPPED || 'stopped') ||
+         updates.status === (STATUS.FINISHED || 'finished') ||
+         updates.status === (STATUS.ERROR || 'error')) &&
+        oldState.status === (STATUS.PLAYING || 'playing')) {
       const endTime = Date.now();
       const sessionTime = endTime - (this.state.metadata.startTime || endTime);
       this.state.metadata.readTime += sessionTime;
@@ -186,7 +198,7 @@ class StateManager {
     const oldState = await this.getState();
 
     this.state = {
-      status: 'stopped',
+      status: STATUS.STOPPED || 'stopped',
       chapterUrl: '',
       chapterTitle: '',
       currentLine: 0,
@@ -225,8 +237,10 @@ class StateManager {
           readTime: this.state.metadata.readTime
         };
 
-        const result = await chrome.storage.local.get(['readingHistory']);
-        let history = result.readingHistory || [];
+        const storage = globalThis.StorageService;
+        let history = storage?.getReadingHistory
+          ? await storage.getReadingHistory()
+          : [];
 
         // Thêm entry mới lên đầu
         history.unshift(historyEntry);
@@ -234,7 +248,12 @@ class StateManager {
         // Giữ tối đa 100 entry gần nhất
         history = history.slice(0, 100);
 
-        await chrome.storage.local.set({ readingHistory: history });
+        if (storage?.setReadingHistory) {
+          await storage.setReadingHistory(history);
+        } else {
+          const historyKey = STORAGE.READING_HISTORY || 'readingHistory';
+          await chrome.storage.local.set({ [historyKey]: history });
+        }
 
         this.logger?.log('Đã lưu lịch sử đọc chương', { entry: historyEntry });
       }
@@ -263,3 +282,4 @@ class StateManager {
 }
 
 export default StateManager;
+

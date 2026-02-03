@@ -1,8 +1,14 @@
-/**
+﻿/**
  * Logger Service - Quản lý logging toàn hệ thống extension
  * Hỗ trợ các mức log (ERROR, WARN, INFO, DEBUG), lưu lịch sử log,
  * override console khi debug, và lưu log vào chrome.storage.local
  */
+
+import '../utils/constants.js';
+import '../utils/StorageService.js';
+const CONFIG = globalThis.NOVELSPEECH_CONFIG || {};
+const STORAGE = CONFIG.STORAGE_KEYS || {};
+
 class Logger {
   constructor() {
     this.logLevels = {
@@ -38,8 +44,15 @@ class Logger {
    */
   async loadLogLevel() {
     try {
-      const result = await chrome.storage.local.get(['settings']);
-      if (result.settings?.advanced?.enableDebug) {
+      let settings = null;
+      if (globalThis.StorageService?.getUserSettings) {
+        settings = await globalThis.StorageService.getUserSettings();
+      } else {
+        const key = STORAGE.USER_SETTINGS || 'userSettings';
+        const result = await chrome.storage.local.get([key, 'settings']);
+        settings = result[key] || result.settings || null;
+      }
+      if (settings?.advanced?.enableDebug) {
         this.currentLevel = this.logLevels.DEBUG;
       }
     } catch (error) {
@@ -151,8 +164,14 @@ class Logger {
    */
   async saveHistoryToStorage() {
     try {
-      const result = await chrome.storage.local.get(['systemLogs']);
-      const existingLogs = result.systemLogs || [];
+      let existingLogs = [];
+      if (globalThis.StorageService?.getSystemLogs) {
+        existingLogs = await globalThis.StorageService.getSystemLogs();
+      } else {
+        const key = STORAGE.SYSTEM_LOGS || 'systemLogs';
+        const result = await chrome.storage.local.get([key]);
+        existingLogs = result[key] || [];
+      }
 
       // Ghép history hiện tại với log cũ trong storage
       const allLogs = [...this.logHistory, ...existingLogs];
@@ -160,7 +179,12 @@ class Logger {
       // Giữ lại 200 log mới nhất
       const limitedLogs = allLogs.slice(0, 200);
 
-      await chrome.storage.local.set({ systemLogs: limitedLogs });
+      if (globalThis.StorageService?.setSystemLogs) {
+        await globalThis.StorageService.setSystemLogs(limitedLogs);
+      } else {
+        const key = STORAGE.SYSTEM_LOGS || 'systemLogs';
+        await chrome.storage.local.set({ [key]: limitedLogs });
+      }
     } catch (error) {
       // Ignore lỗi storage (không làm gián đoạn extension)
       console.warn('⚠️ Lỗi lưu log vào storage:', error);
@@ -234,7 +258,12 @@ class Logger {
   async clearLogs() {
     this.logHistory = [];
     try {
-      await chrome.storage.local.remove(['systemLogs']);
+      const key = STORAGE.SYSTEM_LOGS || 'systemLogs';
+      if (globalThis.StorageService?.removeValue) {
+        await globalThis.StorageService.removeValue([key]);
+      } else {
+        await chrome.storage.local.remove([key]);
+      }
     } catch (error) {
       console.warn('⚠️ Lỗi xóa log trong storage:', error);
     }
@@ -257,3 +286,4 @@ class Logger {
 }
 
 export default Logger;
+

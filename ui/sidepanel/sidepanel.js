@@ -1,3 +1,7 @@
+const CONFIG = globalThis.NOVELSPEECH_CONFIG || {};
+const STORAGE = CONFIG.STORAGE_KEYS || {};
+const MESSAGES = CONFIG.MESSAGES || {};
+
 class StoryReaderSidepanel extends BaseUI {
   constructor() {
     super();
@@ -8,12 +12,6 @@ class StoryReaderSidepanel extends BaseUI {
       bookmarks: [],
       currentChapter: null
     };
-
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', () => this.init());
-    } else {
-      this.init();
-    }
   }
 
   initElements() {
@@ -134,10 +132,12 @@ class StoryReaderSidepanel extends BaseUI {
   }
 
   handleStorageChanges(changes) {
-    if (changes.readingState || changes.chapters) {
+    const stateKey = STORAGE.READING_STATE || 'readingState';
+    if (changes[stateKey] || changes.chapters) {
       this.loadChapters();
     }
-    if (changes.readingHistory) {
+    const historyKey = STORAGE.READING_HISTORY || 'readingHistory';
+    if (changes[historyKey]) {
       this.loadHistory();
     }
     if (changes.bookmarks) {
@@ -146,16 +146,16 @@ class StoryReaderSidepanel extends BaseUI {
   }
 
   handleMessages(message, sender, sendResponse) {
-    switch (message.type) {
-      case 'chapterUpdated':
-        this.loadChapters();
-        break;
-      case 'bookmarkAdded':
-        this.loadBookmarks();
-        break;
-      case 'historyUpdated':
-        this.loadHistory();
-        break;
+      switch (message.type) {
+        case MESSAGES.CHAPTER_UPDATED || 'chapterUpdated':
+          this.loadChapters();
+          break;
+        case MESSAGES.BOOKMARK_ADDED || 'bookmarkAdded':
+          this.loadBookmarks();
+          break;
+        case MESSAGES.HISTORY_UPDATED || 'historyUpdated':
+          this.loadHistory();
+          break;
     }
   }
 
@@ -165,7 +165,7 @@ class StoryReaderSidepanel extends BaseUI {
 
       const [chapters, readingState] = await Promise.all([
         this.services.getStorage('chapters'),
-        this.services.getStorage('readingState')
+        this.services.getStorage(STORAGE.READING_STATE || 'readingState')
       ]);
 
       this.data.chapters = chapters || [];
@@ -196,7 +196,7 @@ class StoryReaderSidepanel extends BaseUI {
     try {
       this.elements.historyList.innerHTML = this.templates.loading();
 
-      const history = await this.services.getStorage('readingHistory');
+      const history = await this.services.getStorage(STORAGE.READING_HISTORY || 'readingHistory');
       this.data.history = history || [];
 
       if (!this.data.history.length) {
@@ -289,7 +289,7 @@ class StoryReaderSidepanel extends BaseUI {
     try {
       this.showNotification('Đang chuyển chương...');
 
-      const response = await this.sendCommand('switchChapter', { url });
+      const response = await this.sendCommand(MESSAGES.SWITCH_CHAPTER || 'switchChapter', { url });
 
       if (response?.success) {
         this.showNotification('Đã chuyển chương thành công', 'success');
@@ -407,18 +407,18 @@ class StoryReaderSidepanel extends BaseUI {
       this.log(`Sending sidepanel command: ${command}`, 'info');
 
       // Handle sidepanel-specific commands locally first
-      switch (command) {
-        case 'switchChapter':
+        switch (command) {
+        case MESSAGES.SWITCH_CHAPTER || 'switchChapter':
           return await this.handleSwitchChapter(data.url);
-        case 'addBookmark':
+        case MESSAGES.ADD_BOOKMARK || 'addBookmark':
           return await this.handleAddBookmark();
-        case 'goToBookmark':
+        case MESSAGES.GO_TO_BOOKMARK || 'goToBookmark':
           return await this.handleGoToBookmark(data.index);
-        case 'deleteBookmark':
+        case MESSAGES.DELETE_BOOKMARK || 'deleteBookmark':
           return await this.handleDeleteBookmark(data.index);
-        case 'clearHistory':
+        case MESSAGES.CLEAR_HISTORY || 'clearHistory':
           return await this.handleClearHistory();
-        case 'exportLogs':
+        case MESSAGES.EXPORT_LOGS || 'exportLogs':
           return await this.handleExportLogs();
         default:
           // For other commands, use parent class method
@@ -430,7 +430,7 @@ class StoryReaderSidepanel extends BaseUI {
   }
 
   async handleSwitchChapter(url) {
-    const response = await this.services.sendMessage('switchChapter', { url });
+    const response = await this.services.sendMessage(MESSAGES.SWITCH_CHAPTER || 'switchChapter', { url });
 
     if (response?.success) {
       // Update current chapter in local data
@@ -445,7 +445,7 @@ class StoryReaderSidepanel extends BaseUI {
 
   async handleAddBookmark() {
     // Get current reading state
-    const state = await this.services.getStorage('readingState');
+    const state = await this.services.getStorage(STORAGE.READING_STATE || 'readingState');
 
     if (!state || !state.currentLineContent) {
       return {
@@ -473,7 +473,7 @@ class StoryReaderSidepanel extends BaseUI {
     this.data.bookmarks = updatedBookmarks;
 
     // Notify other components
-    await this.services.sendMessage('bookmarkAdded', bookmark);
+    await this.services.sendMessage(MESSAGES.BOOKMARK_ADDED || 'bookmarkAdded', bookmark);
 
     return { success: true };
   }
@@ -489,7 +489,7 @@ class StoryReaderSidepanel extends BaseUI {
     }
 
     // Switch to chapter and line
-    return await this.services.sendMessage('goToBookmark', bookmark);
+    return await this.services.sendMessage(MESSAGES.GO_TO_BOOKMARK || 'goToBookmark', bookmark);
   }
 
   async handleDeleteBookmark(index) {
@@ -511,13 +511,13 @@ class StoryReaderSidepanel extends BaseUI {
   }
 
   async handleClearHistory() {
-    await this.services.setStorage('readingHistory', []);
+    await this.services.setStorage(STORAGE.READING_HISTORY || 'readingHistory', []);
     this.data.history = [];
     return { success: true };
   }
 
   async handleExportLogs() {
-    const logs = await this.services.getStorage('systemLogs') || [];
+    const logs = await this.services.getStorage(STORAGE.SYSTEM_LOGS || 'systemLogs') || [];
 
     if (logs.length === 0) {
       return {

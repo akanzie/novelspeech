@@ -5,8 +5,8 @@
   "description": "Đọc truyện chữ bằng giọng nói với OCR và highlight",
   "permissions": [
     "activeTab",
+    "alarms",
     "storage",
-    "scripting",
     "sidePanel",
     "tts"
   ],
@@ -23,8 +23,19 @@
         "*://*/*"
       ],
       "js": [
+        "utils/constants.js",
+        "utils/LogService.js",
+        "utils/StorageService.js",
+        "libs/tesseract/tesseract.min.js",
+        "content/OCRProcessor.js",
+        "content/DomFinder.js",
+        "content/TextNormalizer.js",
+        "content/OcrPipeline.js",
+        "content/CacheManager.js",
         "content/ContentExtractor.js",
         "content/DOMController.js",
+        "content/MessageRouter.js",
+        "content/AutoExtract.js",
         "content/content.js"
       ],
       "css": [
@@ -37,6 +48,7 @@
     {
       "resources": [
         "libs/tesseract/*",
+        "libs/tesseract/lang/*",
         "content/*",
         "ui/*"
       ],

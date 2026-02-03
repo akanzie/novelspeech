@@ -1,0 +1,337 @@
+/**
+ * OCRProcessor - xử lý OCR trong content script (Tesseract.js + cache)
+ * Tách khỏi ContentExtractor để dễ maintain và tái sử dụng.
+ */
+
+const CONFIG = globalThis.NOVELSPEECH_CONFIG || {};
+const STORAGE = CONFIG.STORAGE_KEYS || {};
+
+class OCRProcessor {
+  constructor(config = {}) {
+    this.config = {
+      ocrLanguage: 'vie',
+      cacheOCR: true,
+      maxCacheSize: 100,
+      debug: false,
+      ...config
+    };
+
+    this.ocrWorker = null;
+    this.isReady = false;
+    this.ocrCache = new Map();
+    this.ocrCacheLoaded = false;
+  }
+
+  log(message, data = null, level = 'INFO') {
+    if (globalThis.LogService?.log) {
+      globalThis.LogService.log('OCRProcessor', message, level, data || {});
+      return;
+    }
+
+    const prefix = '[OCRProcessor]';
+    const timestamp = new Date().toISOString().split('T')[1].split('.')[0];
+    if (String(level).toUpperCase() === 'ERROR') {
+      console.error(`${prefix} ${timestamp} - ${message}`, data || '');
+    } else if (String(level).toUpperCase() === 'WARN') {
+      console.warn(`${prefix} ${timestamp} - ${message}`, data || '');
+    } else {
+      console.log(`${prefix} ${timestamp} - ${message}`, data || '');
+    }
+  }
+
+  setConfig(config = {}) {
+    this.config = { ...this.config, ...config };
+  }
+
+  normalizeOcrLanguage(value) {
+    if (Array.isArray(value)) {
+      const langs = value
+        .map(item => String(item || '').trim())
+        .filter(Boolean);
+      return langs.length > 0 ? langs.join('+') : 'vie';
+    }
+
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      return trimmed.length > 0 ? trimmed : 'vie';
+    }
+
+    return 'vie';
+  }
+
+  async ensureReady(settings = {}) {
+    this.setConfig(settings);
+    const ocrLang = this.normalizeOcrLanguage(this.config.ocrLanguage);
+    const ready = await this.initWorker(ocrLang);
+    if (!ready) return false;
+    await this.loadCacheFromStorage();
+    return this.isReady;
+  }
+
+  async initWorker(ocrLang) {
+    if (this.isReady) return true;
+
+    try {
+      if (window.__novelSpeechOcrWorkerPromise) {
+        const shared = await window.__novelSpeechOcrWorkerPromise;
+        if (shared?.worker) {
+      this.ocrWorker = shared?.worker || null;
+      this.isReady = shared?.ready === true;
+
+          if (shared.language && shared.language !== ocrLang) {
+            try {
+              if (typeof this.ocrWorker.reinitialize === 'function') {
+                await this.ocrWorker.reinitialize(ocrLang, Tesseract.OEM.LSTM_ONLY);
+              } else {
+                await this.ocrWorker.loadLanguage(ocrLang);
+                await this.ocrWorker.initialize(ocrLang, Tesseract.OEM.LSTM_ONLY);
+              }
+              shared.language = ocrLang;
+              this.isReady = true;
+            } catch (error) {
+              this.log(`Không thể đổi ngôn ngữ OCR: ${error.message}`, { error }, 'WARN');
+            }
+          }
+
+          return this.isReady;
+        }
+      }
+
+      window.__novelSpeechOcrWorkerPromise = (async () => {
+        this.log('Đang khởi tạo OCR worker (Tesseract.js)...');
+
+        if (typeof Tesseract === 'undefined') {
+          const loadedLocal = await this.loadTesseractScript(true);
+          if (!loadedLocal) {
+            await this.loadTesseractScript(false);
+          }
+        }
+
+        this.ocrWorker = await Tesseract.createWorker(
+          ocrLang,
+          Tesseract.OEM.LSTM_ONLY,
+          {
+            workerPath: this.getWorkerPath(),
+            langPath: this.getLangPath(),
+            corePath: this.getCorePath()
+          }
+        );
+
+        if (this.config.debug && typeof Tesseract.setLogging === 'function') {
+          Tesseract.setLogging(true);
+        }
+
+        await this.ocrWorker.setParameters({
+          tessedit_pageseg_mode: Tesseract.PSM.SINGLE_BLOCK,
+          preserve_interword_spaces: '1',
+          tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzÀÁÂÃÈÉÊÌÍÒÓÔÕÙÚĂĐĨŨƠàáâãèéêìíòóôõùúăđĩũơưĂẠẢẤẦẨẪẬẮẰẲẴẶẸẺẼỀỀỂỄỆỈỊỌỎỐỒỔỖỘỚỜỞỠỢỤỦỨỪỬỮỰỲỴÝỶỸ0123456789.,!?\'"()[]{}:;-–— ',
+        });
+
+        this.isReady = true;
+        this.log('OCR worker ready');
+        return {
+          worker: this.ocrWorker,
+          language: ocrLang,
+          ready: true
+        };
+      })();
+
+      const shared = await window.__novelSpeechOcrWorkerPromise;
+      this.ocrWorker = shared?.worker || null;
+      this.isReady = shared?.ready === true;
+      return this.isReady;
+    } catch (error) {
+      this.log(`Khởi tạo OCR thất bại: ${error.message}`, { error }, 'ERROR');
+      this.isReady = false;
+      window.__novelSpeechOcrWorkerPromise = null;
+      return false;
+    }
+  }
+
+  async loadTesseractScript(useLocal) {
+    return new Promise((resolve) => {
+      const script = document.createElement('script');
+      script.src = useLocal ? this.getLocalTesseractPath() : this.getCdnTesseractPath();
+      script.onload = () => resolve(true);
+      script.onerror = () => resolve(false);
+      document.head.appendChild(script);
+    });
+  }
+
+  getLocalTesseractPath() {
+    if (chrome?.runtime?.getURL) {
+      return chrome.runtime.getURL('libs/tesseract/tesseract.min.js');
+    }
+    return '';
+  }
+
+  getCdnTesseractPath() {
+    return 'https://cdn.jsdelivr.net/npm/tesseract.js@v5.1.0/dist/tesseract.min.js';
+  }
+
+  getWorkerPath() {
+    if (chrome?.runtime?.getURL) {
+      return chrome.runtime.getURL('libs/tesseract/worker.min.js');
+    }
+    return 'https://cdn.jsdelivr.net/npm/tesseract.js@v5.1.0/dist/worker.min.js';
+  }
+
+  getCorePath() {
+    if (chrome?.runtime?.getURL) {
+      return chrome.runtime.getURL('libs/tesseract/tesseract-core.wasm.js');
+    }
+    return 'https://cdn.jsdelivr.net/npm/tesseract.js-core@v5.1.0';
+  }
+
+  getLangPath() {
+    if (chrome?.runtime?.getURL) {
+      return chrome.runtime.getURL('libs/tesseract/lang');
+    }
+    return 'https://tessdata.projectnaptha.com/4.0.0';
+  }
+
+  async recognizeCanvas(canvas, settings = {}) {
+    try {
+      if (!(await this.ensureReady(settings))) return '';
+      const cacheKey = this.getCanvasHash(canvas);
+      if (this.config.cacheOCR) {
+        const cached = this.getCachedOcr(cacheKey);
+        if (cached) return cached;
+      }
+
+      const { data: { text } } = await this.ocrWorker.recognize(canvas);
+      const cleanText = (text || '').trim();
+      if (cleanText.length > 0 && this.config.cacheOCR) {
+        this.setCachedOcr(cacheKey, cleanText, this.config.maxCacheSize);
+      }
+      return cleanText;
+    } catch (err) {
+      this.log(`OCR canvas lỗi: ${err.message}`, { error: err }, 'WARN');
+      return '';
+    }
+  }
+
+  async recognizeImage(img, settings = {}) {
+    try {
+      if (!(await this.ensureReady(settings))) return '';
+      const cacheKey = this.getImageHash(img);
+      if (this.config.cacheOCR) {
+        const cached = this.getCachedOcr(cacheKey);
+        if (cached) return cached;
+      }
+
+      const { data: { text } } = await this.ocrWorker.recognize(img);
+      const cleanText = (text || '').trim();
+      if (cleanText.length > 0 && this.config.cacheOCR) {
+        this.setCachedOcr(cacheKey, cleanText, this.config.maxCacheSize);
+      }
+      return cleanText;
+    } catch (err) {
+      this.log(`OCR ảnh lỗi: ${err.message}`, { error: err }, 'WARN');
+      return '';
+    }
+  }
+
+  getCanvasHash(canvas) {
+    try {
+      const dataUrl = canvas.toDataURL('image/png');
+      return this.simpleHash(dataUrl.substring(0, 200));
+    } catch {
+      return `${canvas.width}x${canvas.height}`;
+    }
+  }
+
+  getImageHash(img) {
+    try {
+      const src = img.getAttribute('src') || '';
+      return this.simpleHash(src);
+    } catch {
+      return `img_${img.width}x${img.height}`;
+    }
+  }
+
+  simpleHash(str) {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      hash = (hash << 5) - hash + str.charCodeAt(i);
+      hash |= 0;
+    }
+    return hash.toString(36);
+  }
+
+  async loadCacheFromStorage() {
+    if (this.ocrCacheLoaded) return;
+    this.ocrCacheLoaded = true;
+
+    try {
+      let entries = [];
+      if (globalThis.StorageService?.getOcrCache) {
+        entries = await globalThis.StorageService.getOcrCache();
+      } else {
+        const cacheKey = STORAGE.OCR_CACHE || 'ocrCache';
+        const result = await chrome.storage.local.get([cacheKey]);
+        entries = Array.isArray(result[cacheKey]) ? result[cacheKey] : [];
+      }
+
+      entries.forEach(entry => {
+        if (entry?.key && entry?.text) {
+          this.ocrCache.set(entry.key, entry.text);
+        }
+      });
+    } catch (error) {
+      this.log('Không thể load cache OCR từ storage', { error }, 'WARN');
+    }
+  }
+
+  getCachedOcr(key) {
+    return this.ocrCache.get(key);
+  }
+
+  async setCachedOcr(key, text, maxSize = 100) {
+    this.ocrCache.set(key, text);
+    if (this.ocrCache.size > maxSize) {
+      const firstKey = this.ocrCache.keys().next().value;
+      this.ocrCache.delete(firstKey);
+    }
+    await this.saveCacheToStorage();
+  }
+
+  async saveCacheToStorage() {
+    try {
+      const entries = Array.from(this.ocrCache.entries()).map(([key, text]) => ({
+        key,
+        text,
+        timestamp: Date.now()
+      }));
+      if (globalThis.StorageService?.setOcrCache) {
+        await globalThis.StorageService.setOcrCache(entries);
+      } else {
+        const cacheKey = STORAGE.OCR_CACHE || 'ocrCache';
+        await chrome.storage.local.set({ [cacheKey]: entries });
+      }
+    } catch (error) {
+      this.log('Không thể lưu cache OCR', { error }, 'WARN');
+    }
+  }
+
+  clearCache() {
+    this.ocrCache.clear();
+    this.log('Đã xóa cache OCR');
+  }
+
+  async terminate() {
+    if (this.ocrWorker) {
+      await this.ocrWorker.terminate();
+      this.ocrWorker = null;
+      this.isReady = false;
+      if (typeof window !== 'undefined') {
+        window.__novelSpeechOcrWorkerPromise = null;
+      }
+      this.log('OCR worker đã được terminate');
+    }
+  }
+}
+
+if (typeof window !== 'undefined') {
+  window.OCRProcessor = OCRProcessor;
+}

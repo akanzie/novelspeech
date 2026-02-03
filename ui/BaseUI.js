@@ -16,17 +16,29 @@ class BaseUI {
     } else {
       // Fallback basic services
       this.services = {
-        log: (message, level = 'info') => console.log(`[${level}] ${message}`),
+        log: (message, level = 'info') => {
+          if (globalThis.LogService?.log) {
+            globalThis.LogService.log('BaseUI', message, level);
+            return;
+          }
+          console.log(`[${level}] ${message}`);
+        },
         showNotification: (message, type = 'info') => {
-          console.log(`Notification [${type}]: ${message}`);
+          console.log(`Thông báo [${type}]: ${message}`);
           this.showNotification(message, type);
         },
         getStorage: async (key) => {
+          if (globalThis.StorageService?.getValue) {
+            return globalThis.StorageService.getValue(key);
+          }
           return new Promise(resolve => {
             chrome.storage.local.get([key], result => resolve(result[key]));
           });
         },
         setStorage: async (key, value) => {
+          if (globalThis.StorageService?.setValue) {
+            return globalThis.StorageService.setValue(key, value);
+          }
           return new Promise(resolve => {
             chrome.storage.local.set({ [key]: value }, () => resolve());
           });
@@ -64,7 +76,7 @@ class BaseUI {
     if (this.isInitialized) return;
 
     try {
-      this.services.log(this.constructor.name, 'Initializing...', 'info');
+      this.services.log(this.constructor.name, 'Đang khởi tạo...', 'info');
 
       this.initElements();
       this.bindEvents();
@@ -72,12 +84,16 @@ class BaseUI {
       this.setupTheme();
 
       this.isInitialized = true;
-      this.services.log(this.constructor.name, 'Initialized successfully', 'info');
+      this.services.log(this.constructor.name, 'Khởi tạo thành công', 'info');
 
     } catch (error) {
-      this.services.handleError?.(error, `Failed to initialize ${this.constructor.name}`);
-      console.error('Initialization error:', error);
+      this.services.handleError?.(error, `Khoi tao ${this.constructor.name} that bai`);
+      this.services.log(this.constructor.name, 'Lỗi khởi tạo', 'error');
     }
+  }
+
+  log(message, level = 'info') {
+    this.services?.log(this.constructor.name, message, level);
   }
 
   initElements() {
@@ -100,7 +116,7 @@ class BaseUI {
 
   async sendCommand(command, data = {}) {
     try {
-      this.services.log(this.constructor.name, `Sending command: ${command}`, 'info');
+      this.services.log(this.constructor.name, `Gửi lệnh: ${command}`, 'info');
 
       const response = await this.services.sendMessage(command, data);
 
@@ -198,7 +214,7 @@ class BaseUI {
   }
 
   handleError(error, context) {
-    console.error(`[${this.constructor.name}] ${context}:`, error);
+    this.services.log(this.constructor.name, `${context}: ${error.message || 'Lỗi không xác định'}`, 'error');
     this.showNotification(`Lỗi: ${error.message || context}`, 'error');
     return { success: false, error: error.message };
   }

@@ -1,35 +1,14 @@
+const CONFIG = globalThis.NOVELSPEECH_CONFIG || {};
+const STORAGE = CONFIG.STORAGE_KEYS || {};
+const DEFAULT_SETTINGS = CONFIG.DEFAULT_SETTINGS || {};
+const MESSAGES = CONFIG.MESSAGES || {};
+
 class StoryReaderOptions extends BaseUI {
   constructor() {
     super();
 
     // Default settings structure
-    this.settings = {
-      general: {
-        autoStart: false,
-        autoNextChapter: false,
-        saveHistory: true,
-        pageLoadTimeout: 10
-      },
-      tts: {
-        engine: 'edge',
-        defaultVoice: 'vi-VN-HoaiMyNeural',
-        defaultSpeed: 1.0,
-        defaultPitch: 1.0,
-        volume: 100
-      },
-      appearance: {
-        theme: 'auto',
-        highlightColor: '#ffeb3b',
-        highlightOpacity: 0.3,
-        fontSize: 14
-      },
-      advanced: {
-        ocrLanguage: 'vie',
-        cacheOCRResults: true,
-        enableDebug: false,
-        maxCacheSize: 100
-      }
-    };
+    this.settings = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
 
     this.isDirty = false;
     this.originalSettings = null;
@@ -188,7 +167,8 @@ class StoryReaderOptions extends BaseUI {
     this.services.showLoading();
 
     try {
-      const savedSettings = await this.services.getStorage('userSettings');
+      const settingsKey = STORAGE.USER_SETTINGS || 'userSettings';
+      const savedSettings = await this.services.getStorage(settingsKey);
 
       if (savedSettings) {
         // Deep merge saved settings with defaults
@@ -355,10 +335,11 @@ class StoryReaderOptions extends BaseUI {
       this.services.showLoading();
 
       // Save to storage
-      await this.services.setStorage('userSettings', this.settings);
+      const settingsKey = STORAGE.USER_SETTINGS || 'userSettings';
+      await this.services.setStorage(settingsKey, this.settings);
 
       // Notify other components
-      await this.services.sendMessage('settingsUpdated', this.settings);
+      await this.services.sendMessage(MESSAGES.SETTINGS_UPDATED || 'settingsUpdated', this.settings);
 
       // Update original settings
       this.originalSettings = JSON.parse(JSON.stringify(this.settings));
@@ -386,33 +367,7 @@ class StoryReaderOptions extends BaseUI {
       this.services.showLoading();
 
       // Reset to defaults
-      this.settings = {
-        general: {
-          autoStart: false,
-          autoNextChapter: false,
-          saveHistory: true,
-          pageLoadTimeout: 10
-        },
-        tts: {
-          engine: 'edge',
-          defaultVoice: 'vi-VN-HoaiMyNeural',
-          defaultSpeed: 1.0,
-          defaultPitch: 1.0,
-          volume: 100
-        },
-        appearance: {
-          theme: 'auto',
-          highlightColor: '#ffeb3b',
-          highlightOpacity: 0.3,
-          fontSize: 14
-        },
-        advanced: {
-          ocrLanguage: 'vie',
-          cacheOCRResults: true,
-          enableDebug: false,
-          maxCacheSize: 100
-        }
-      };
+      this.settings = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
 
       this.updateUI();
       this.markAsClean();
@@ -432,7 +387,8 @@ class StoryReaderOptions extends BaseUI {
       this.showNotification('Đang mở logs...');
 
       // Create log viewer modal
-      const logs = await this.services.getStorage('systemLogs') || [];
+      const logKey = STORAGE.SYSTEM_LOGS || 'systemLogs';
+      const logs = await this.services.getStorage(logKey) || [];
 
       if (logs.length === 0) {
         await this.alert('Không có logs để hiển thị', 'Logs');
@@ -548,13 +504,17 @@ class StoryReaderOptions extends BaseUI {
       this.services.showLoading();
 
       // Clear all data
-      await chrome.storage.local.clear();
+      if (globalThis.StorageService?.clearAll) {
+        await globalThis.StorageService.clearAll({ includeSession: true });
+      } else {
+        await chrome.storage.local.clear();
+      }
 
       // Reset settings
       await this.resetSettings();
 
       // Notify other components
-      await this.services.sendMessage('dataCleared');
+      await this.services.sendMessage(MESSAGES.DATA_CLEARED || 'dataCleared');
 
       this.showNotification('Đã xóa tất cả dữ liệu thành công', 'success');
       this.log('All data cleared');

@@ -4,10 +4,16 @@
  * broadcast state, và các tác vụ định kỳ
  */
 
+import '../utils/constants.js';
+import '../utils/StorageService.js';
 import StateManager from './StateManager.js';
 import EventHandler from './EventHandler.js';
-import TTSService from '../core/services/TTSService.js';
-import Logger from '../core/services/Logger.js';
+import TTSService from '../core/TTSService.js';
+import Logger from '../core/Logger.js';
+
+const CONFIG = globalThis.NOVELSPEECH_CONFIG || {};
+const STATUS = CONFIG.READING_STATUS || {};
+const MESSAGES = CONFIG.MESSAGES || {};
 
 class BackgroundService {
   constructor() {
@@ -30,6 +36,9 @@ class BackgroundService {
       this.logger = new Logger();
       this.stateManager = new StateManager();
       this.ttsService = new TTSService();
+      if (this.ttsService?.setLogger) {
+        this.ttsService.setLogger(this.logger);
+      }
       this.eventHandler = new EventHandler();
 
       // Dependency injection - liên kết các service
@@ -45,6 +54,7 @@ class BackgroundService {
 
       // Thiết lập các tác vụ định kỳ (auto-save, cleanup cache)
       this.setupPeriodicTasks();
+      this.setupLifecycleListeners();
 
       this.logger?.log('✅ Background Service đã khởi tạo thành công');
 
@@ -63,7 +73,8 @@ class BackgroundService {
       await this.broadcastStateUpdate(newState);
 
       // Lưu lịch sử đọc khi dừng hoặc đọc xong chương
-      if (newState.status === 'stopped' || newState.status === 'finished') {
+      if (newState.status === (STATUS.STOPPED || 'stopped') ||
+          newState.status === (STATUS.FINISHED || 'finished')) {
         await this.stateManager.saveReadingHistory();
         this.logger?.log('Đã lưu lịch sử đọc', { status: newState.status });
       }
@@ -84,12 +95,22 @@ class BackgroundService {
   async broadcastStateUpdate(state) {
     try {
       // Gửi tới popup/sidepanel (cùng type message)
-      chrome.runtime.sendMessage({
-        type: 'stateUpdate',
-        data: state
-      }).catch(() => {
-        // Popup/sidepanel có thể chưa mở → bỏ qua lỗi
-      });
+      const maybePromise = chrome.runtime.sendMessage(
+        {
+          type: MESSAGES.STATE_UPDATE || 'stateUpdate',
+          data: state
+        },
+        () => {
+          if (chrome.runtime.lastError) {
+            // ignore
+          }
+        }
+      );
+      if (maybePromise && typeof maybePromise.catch === 'function') {
+        maybePromise.catch(() => {
+          // ignore
+        });
+      }
 
       this.logger?.debug('Đã broadcast state update', { state });
     } catch (error) {
@@ -102,20 +123,85 @@ class BackgroundService {
    * (auto-save state và cleanup cache)
    */
   setupPeriodicTasks() {
-    // Auto-save state mỗi phút
-    setInterval(async () => {
-      try {
-        await this.stateManager.saveToStorage();
-        this.logger?.debug('Đã tự động lưu state vào storage');
-      } catch (error) {
-        this.logger?.error('Lỗi auto-save state', { error });
-      }
-    }, 60000);
+    this.registerAlarmListeners();
+    this.createAlarms();
 
-    // Cleanup cache OCR mỗi giờ
-    setInterval(async () => {
-      await this.cleanupOldCache();
-    }, 3600000); // 1 giờ
+    // Chay ngay lan dau de dam bao state va cache hop le
+    this.runAutoSave();
+    this.runCleanupCache();
+  }
+
+  registerAlarmListeners() {
+    chrome.alarms.onAlarm.addListener((alarm) => {
+      this.handleAlarm(alarm);
+    });
+  }
+
+  createAlarms() {
+    chrome.alarms.create('auto-save-state', {
+      periodInMinutes: 1
+    });
+
+    chrome.alarms.create('cleanup-ocr-cache', {
+      periodInMinutes: 60
+    });
+  }
+
+  async handleAlarm(alarm) {
+    try {
+      switch (alarm.name) {
+        case 'auto-save-state':
+          await this.runAutoSave();
+          break;
+        case 'cleanup-ocr-cache':
+          await this.runCleanupCache();
+          break;
+        default:
+          break;
+      }
+    } catch (error) {
+      this.logger?.error('Loi xu ly alarm', { error, name: alarm.name });
+    }
+  }
+
+  async runAutoSave() {
+    try {
+      await this.stateManager.saveToStorage();
+      this.logger?.debug('Đã tự động lưu state vào storage');
+    } catch (error) {
+      this.logger?.error('Lỗi auto-save state', { error });
+    }
+  }
+
+  async runCleanupCache() {
+    await this.cleanupOldCache();
+  }
+
+  /**
+   * Lắng nghe lifecycle để dọn dẹp cache khi trình duyệt tắt
+   */
+  setupLifecycleListeners() {
+    chrome.runtime.onSuspend.addListener(() => {
+      this.clearOcrCacheOnShutdown();
+    });
+  }
+
+  /**
+   * Xóa cache OCR khi trình duyệt tắt (hoặc SW bị terminate)
+   */
+  async clearOcrCacheOnShutdown() {
+    try {
+      if (globalThis.StorageService?.clearOcrCache) {
+        await globalThis.StorageService.clearOcrCache();
+      } else {
+        const storage = this.getCacheStorage();
+        const cacheKey = CONFIG?.STORAGE_KEYS?.OCR_CACHE || 'ocrCache';
+        await storage.remove([cacheKey]);
+      }
+      this.logger?.log('Đã xóa cache OCR khi tắt trình duyệt');
+    } catch (error) {
+      this.logger?.error('Lỗi khi xóa cache OCR khi tắt trình duyệt', { error });
+    }
   }
 
   /**
@@ -123,21 +209,48 @@ class BackgroundService {
    */
   async cleanupOldCache() {
     try {
-      const result = await chrome.storage.local.get(['ocrCache']);
-      if (result.ocrCache && Array.isArray(result.ocrCache)) {
+      let entries = [];
+      if (globalThis.StorageService?.getOcrCache) {
+        entries = await globalThis.StorageService.getOcrCache();
+      } else {
+        const storage = this.getCacheStorage();
+        const cacheKey = CONFIG?.STORAGE_KEYS?.OCR_CACHE || 'ocrCache';
+        const result = await storage.get([cacheKey]);
+        entries = result[cacheKey] || [];
+      }
+      if (entries && Array.isArray(entries)) {
         const now = Date.now();
-        const filteredCache = result.ocrCache.filter(entry => {
+        const filteredCache = entries.filter(entry => {
           return (now - entry.timestamp) < (24 * 60 * 60 * 1000); // 24 giờ
         });
 
-        if (filteredCache.length !== result.ocrCache.length) {
-          await chrome.storage.local.set({ ocrCache: filteredCache });
+        if (filteredCache.length !== entries.length) {
+          if (globalThis.StorageService?.setOcrCache) {
+            await globalThis.StorageService.setOcrCache(filteredCache);
+          } else {
+            const storage = this.getCacheStorage();
+            const cacheKey = CONFIG?.STORAGE_KEYS?.OCR_CACHE || 'ocrCache';
+            await storage.set({ [cacheKey]: filteredCache });
+          }
           this.logger?.log('Đã dọn dẹp cache OCR cũ', { remaining: filteredCache.length });
         }
       }
     } catch (error) {
       this.logger?.error('Lỗi dọn dẹp cache', { error });
     }
+  }
+
+  /**
+   * Ưu tiên dùng storage.session để cache tự xóa khi tắt browser
+   */
+  getCacheStorage() {
+    if (globalThis.StorageService?.getArea) {
+      return globalThis.StorageService.getArea('session') || chrome.storage.local;
+    }
+    if (chrome.storage && chrome.storage.session) {
+      return chrome.storage.session;
+    }
+    return chrome.storage.local;
   }
 
   /**
@@ -159,36 +272,15 @@ class BackgroundService {
    * Thiết lập settings mặc định khi cài đặt lần đầu
    */
   async setupDefaultSettings() {
-    const defaultSettings = {
-      userSettings: {
-        general: {
-          autoStart: false,
-          autoNextChapter: false,
-          saveHistory: true,
-          pageLoadTimeout: 10
-        },
-        tts: {
-          engine: 'edge',
-          defaultVoice: 'vi-VN-HoaiMyNeural',
-          defaultSpeed: 1.0,
-          defaultPitch: 1.0,
-          volume: 100
-        },
-        appearance: {
-          theme: 'auto',
-          highlightColor: '#ffeb3b',
-          highlightOpacity: 0.3
-        },
-        advanced: {
-          ocrLanguage: 'vie',
-          cacheOCRResults: true,
-          enableDebug: false
-        }
-      }
-    };
+    const storageKey = CONFIG?.STORAGE_KEYS?.USER_SETTINGS || 'userSettings';
+    const defaultSettings = CONFIG?.DEFAULT_SETTINGS || {};
 
     try {
-      await chrome.storage.local.set(defaultSettings);
+      if (globalThis.StorageService?.setUserSettings) {
+        await globalThis.StorageService.setUserSettings(defaultSettings);
+      } else {
+        await chrome.storage.local.set({ [storageKey]: defaultSettings });
+      }
       this.logger?.log('Đã lưu settings mặc định');
     } catch (error) {
       this.logger?.error('Lỗi lưu settings mặc định', { error });
@@ -216,3 +308,4 @@ if (typeof window !== 'undefined') {
 }
 
 export default backgroundService;
+

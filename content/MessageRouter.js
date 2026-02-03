@@ -19,11 +19,21 @@
 
     start() {
       chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-        return this.handle(message, sender, sendResponse);
+        this.handle(message, sender)
+          .then((response) => sendResponse(response))
+          .catch((error) => {
+            this._log('Loi xu ly tin nhan', 'ERROR', { error });
+            sendResponse({
+              success: false,
+              error: error?.message || String(error),
+              stack: error?.stack
+            });
+          });
+        return true;
       });
     }
 
-    async handle(message, sender, sendResponse) {
+    async handle(message, sender) {
       this._log(`Nhan tin nhan: ${message.type}`);
 
       try {
@@ -57,17 +67,15 @@
             response = { success: false, error: 'Unknown message type' };
         }
 
-        sendResponse(response);
+        return response;
       } catch (error) {
         this._log('Loi xu ly tin nhan', 'ERROR', { error });
-        sendResponse({
+        return {
           success: false,
           error: error.message,
           stack: error.stack
-        });
+        };
       }
-
-      return true;
     }
 
     async handleExtractContent(options = {}) {

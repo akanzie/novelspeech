@@ -186,6 +186,20 @@ class EventHandler {
         throw new Error('Trích xuất nội dung thất bại: ' + (content?.error || 'Lỗi không xác định'));
       }
 
+      const linesCount = Array.isArray(content.lines) ? content.lines.length : 0;
+      const preview = Array.isArray(content.lines) && content.lines[0]
+        ? String(content.lines[0]).slice(0, 120)
+        : '';
+      this.logger?.log('Bước 1: Đã trích xuất nội dung', {
+        lines: linesCount,
+        length: content.length || 0,
+        preview
+      });
+
+      if (linesCount === 0) {
+        throw new Error('Không có nội dung để đọc (lines = 0)');
+      }
+
       // Bước 2: Cập nhật trạng thái với nội dung mới
       this.logger?.log('Bước 2: Đang cập nhật trạng thái đọc...');
       await this.stateManager.updateState({
@@ -233,6 +247,12 @@ class EventHandler {
     }
 
     const currentLine = state.content[state.currentLine];
+    const currentPreview = currentLine ? String(currentLine).slice(0, 120) : '';
+    this.logger?.log('Chuẩn bị đọc dòng', {
+      index: state.currentLine,
+      total: state.content.length,
+      preview: currentPreview
+    });
 
     // Highlight trước khi phát giọng để người dùng thấy ngay dòng đang đọc
     await this.highlightCurrentLine();

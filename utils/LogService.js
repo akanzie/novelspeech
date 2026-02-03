@@ -12,21 +12,6 @@
     return 'INFO';
   };
 
-  const logLocal = (moduleName, message, level, data = {}) => {
-    const tag = moduleName || 'unknown';
-    const text = `[${tag}] ${message}`;
-    const upper = normalizeLevel(level);
-    if (upper === 'ERROR') {
-      console.error(text, data || {});
-    } else if (upper === 'WARN') {
-      console.warn(text, data || {});
-    } else if (upper === 'DEBUG') {
-      console.debug(text, data || {});
-    } else {
-      console.log(text, data || {});
-    }
-  };
-
   const send = (moduleName, message, level, data = {}) => {
     const payload = {
       level: normalizeLevel(level),
@@ -36,8 +21,6 @@
     };
 
     try {
-      logLocal(payload.module, payload.message, payload.level, payload.data);
-
       if (chrome?.runtime?.sendMessage) {
         // Fire-and-forget; avoid noisy lastError when background closes the port.
         try {
@@ -61,6 +44,38 @@
     return false;
   };
 
+  const installGlobalErrorHandlers = () => {
+    if (globalThis.__novelSpeechLogHandlersInstalled) return;
+    globalThis.__novelSpeechLogHandlersInstalled = true;
+
+    const handleErrorEvent = (event) => {
+      try {
+        const error = event?.error || event?.reason || event;
+        const message = error?.message || event?.message || 'Unknown error';
+        const stack = error?.stack || '';
+        send('GlobalError', message, 'ERROR', { stack });
+      } catch {
+        // ignore
+      }
+    };
+
+    if (typeof globalThis.addEventListener === 'function') {
+      globalThis.addEventListener('error', handleErrorEvent);
+      globalThis.addEventListener('unhandledrejection', handleErrorEvent);
+    } else if (typeof globalThis.onerror === 'function') {
+      const original = globalThis.onerror;
+      globalThis.onerror = (...args) => {
+        try {
+          const message = args?.[0] || 'Unknown error';
+          send('GlobalError', message, 'ERROR', {});
+        } catch {
+          // ignore
+        }
+        return original.apply(globalThis, args);
+      };
+    }
+  };
+
   const LogService = {
     log: (moduleName, message, level = 'INFO', data = {}) => send(moduleName, message, level, data),
     info: (moduleName, message, data = {}) => send(moduleName, message, 'INFO', data),
@@ -72,4 +87,6 @@
   if (!globalThis.LogService) {
     globalThis.LogService = LogService;
   }
+
+  installGlobalErrorHandlers();
 })();

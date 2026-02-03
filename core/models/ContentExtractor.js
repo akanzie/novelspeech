@@ -1,142 +1,133 @@
 /**
- * Content Extraction Module with OCR Support
- * Module trích xuất văn bản từ trang truyện kết hợp OCR cho canvas
+ * ContentExtractor - Module trích xuất nội dung truyện từ trang web
+ * Hỗ trợ trích xuất từ DOM thông thường và OCR cho các trang dùng canvas/image
+ * Được thiết kế chạy trong content script của Chrome Extension
  */
 
 class ContentExtractor {
   constructor() {
-    // DOM selectors cho các trang truyện phổ biến
+    // Các selector phổ biến cho container nội dung truyện
     this.defaultSelectors = [
       '#chapter-content',
       '.chapter-content',
-      '.break-words',           // Selector phổ biến cho truyện convert
+      '.break-words',
       '.chapter-c',             // Truyencv
       '.content1',              // Tangthuvien
       '.box-chap',              // Truyenyy
       '.panel-body',            // Truyenfull
-      '.reading-content',       // Nhiều trang
-      '.entry-content',         // WordPress based
+      '.reading-content',
+      '.entry-content',
       '.article-content',
       '.story-detail',
       '.nd',
       'article',
       'main',
-      '.post-content'
+      '.post-content',
+      '.chap-content',
+      '.read-content'
     ];
 
-    // OCR service
-    this.ocrService = null;
-    this.isOCRReady = false;
-
-    // Cache cho kết quả OCR
-    this.ocrCache = new Map();
-
-    // Cấu hình
+    // Cấu hình mặc định
     this.config = {
-      minTextLength: 100,       // Độ dài tối thiểu để xác định có nội dung
-      ocrLanguage: 'vie',       // Ngôn ngữ OCR mặc định
-      useOCR: true,             // Bật/tắt OCR
-      cacheOCR: true,           // Cache kết quả OCR
-      debug: false              // Chế độ debug
+      minTextLength: 200,       // Độ dài tối thiểu để coi là nội dung hợp lệ
+      ocrLanguage: 'vie',       // Ngôn ngữ OCR
+      useOCR: true,             // Bật OCR khi cần
+      cacheOCR: true,           // Cache kết quả OCR trong session
+      debug: false              // In log chi tiết OCR
     };
 
-    this.log('📖 Content Extractor initialized with OCR support');
+    // Trạng thái OCR
+    this.ocrWorker = null;      // Tesseract worker (hiệu suất tốt hơn recognize trực tiếp)
+    this.isOCRReady = false;
+
+    // Cache OCR trong session (Map: dataURL hash → text)
+    this.ocrCache = new Map();
+
+    this.log('📖 ContentExtractor đã khởi tạo');
   }
 
-  // ============ LOGGING UTILITIES ============
-  log(message, level = 'info') {
+  // ============ LOGGING ============
+  log(message, data = null) {
     const prefix = '[ContentExtractor]';
     const timestamp = new Date().toISOString().split('T')[1].split('.')[0];
 
-    const logEntry = {
-      timestamp,
-      module: 'ContentExtractor',
-      level,
-      message,
-      url: window.location.href
-    };
+    console.log(`${prefix} ${timestamp} - ${message}`, data || '');
 
-    // Console logging
-    switch (level) {
-      case 'error':
-        console.error(`${prefix} ${timestamp} - ${message}`);
-        break;
-      case 'warn':
-        console.warn(`${prefix} ${timestamp} - ${message}`);
-        break;
-      case 'success':
-        console.log(`%c${prefix} ${timestamp} - ${message}`, 'color: green; font-weight: bold');
-        break;
-      default:
-        console.log(`${prefix} ${timestamp} - ${message}`);
-    }
-
-    // Save to storage (optional)
-    this.saveLog(logEntry);
-  }
-
-  saveLog(logEntry) {
-    try {
-      chrome.storage.local.get(['systemLogs'], (result) => {
-        const logs = result.systemLogs || [];
-        logs.unshift(logEntry);
-        if (logs.length > 100) logs.pop();
-        chrome.storage.local.set({ systemLogs: logs });
-      });
-    } catch (e) {
-      // Silent fail for logging
-    }
+    // Có thể mở rộng lưu vào chrome.storage.local nếu cần (giống Logger service)
   }
 
   // ============ OCR INITIALIZATION ============
+  /**
+   * Khởi tạo Tesseract worker (hiệu suất cao hơn recognize trực tiếp)
+   */
   async initOCR() {
     if (this.isOCRReady) return true;
 
     try {
-      this.log('Initializing OCR service...');
+      this.log('Đang khởi tạo OCR worker (Tesseract.js)...');
 
-      // Kiểm tra Tesseract.js đã được load chưa
       if (typeof Tesseract === 'undefined') {
-        this.log('Tesseract.js not loaded, loading from CDN...', 'warn');
-        await this.loadTesseract();
+        this.log('Tesseract.js chưa được load, đang tải từ CDN...', 'warn');
+        await this.loadTesseractScript();
       }
 
-      this.ocrService = Tesseract;
+      // Tạo worker để xử lý song song và không block UI
+      this.ocrWorker = await Tesseract.createWorker({
+        workerPath: 'https://cdn.jsdelivr.net/npm/tesseract.js@v5.1.0/dist/worker.min.js',
+        langPath: 'https://tessdata.projectnaptha.com/4.0.0',
+        corePath: 'https://cdn.jsdelivr.net/npm/tesseract.js-core@v5.1.0',
+        logger: this.config.debug ? (m) => this.log('OCR progress', m) : () => {}
+      });
+
+      await this.ocrWorker.load();
+      await this.ocrWorker.loadLanguage(this.config.ocrLanguage);
+      await this.ocrWorker.initialize(this.config.ocrLanguage, Tesseract.OEM.LSTM_ONLY);
+
+      // Cấu hình tối ưu cho văn bản tiếng Việt trên hình
+      await this.ocrWorker.setParameters({
+        tessedit_pageseg_mode: Tesseract.PSM.SINGLE_BLOCK,
+        preserve_interword_spaces: '1',
+        tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzÀÁÂÃÈÉÊÌÍÒÓÔÕÙÚĂĐĨŨƠàáâãèéêìíòóôõùúăđĩũơƯĂẠẢẤẦẨẪẬẮẰẲẴẶẸẺẼỀỀỂỄỆỈỊỌỎỐỒỔỖỘỚỜỞỠỢỤỦỨỪỬỮỰỲỴÝỶỸ0123456789.,!?\'"()[]{}:;-–— ',
+      });
+
       this.isOCRReady = true;
-      this.log('✅ OCR service ready');
+      this.log('✅ OCR worker đã sẵn sàng');
       return true;
     } catch (error) {
-      this.log(`Failed to initialize OCR: ${error.message}`, 'error');
+      this.log(`❌ Khởi tạo OCR thất bại: ${error.message}`, 'error');
+      this.isOCRReady = false;
       return false;
     }
   }
 
-  async loadTesseract() {
+  async loadTesseractScript() {
     return new Promise((resolve, reject) => {
       const script = document.createElement('script');
-      script.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@v4.0.2/dist/tesseract.min.js';
+      script.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@v5.1.0/dist/tesseract.min.js';
       script.onload = resolve;
-      script.onerror = () => reject(new Error('Failed to load Tesseract.js'));
+      script.onerror = () => reject(new Error('Không tải được Tesseract.js'));
       document.head.appendChild(script);
     });
   }
 
-  // ============ MAIN EXTRACTION METHODS ============
+  // ============ MAIN EXTRACTION ============
+  /**
+   * Hàm chính: Trích xuất nội dung từ trang
+   * @param {Object} options - Cấu hình override
+   */
   async extract(options = {}) {
     const startTime = performance.now();
+    const settings = { ...this.config, ...options };
+
+    this.log('Bắt đầu trích xuất nội dung...');
 
     try {
-      this.log('Starting content extraction...');
+      // Bước 1: Thử trích xuất từ DOM
+      let result = this.extractFromDOM();
 
-      // Merge options với config
-      const settings = { ...this.config, ...options };
-
-      // Bước 1: Thử trích xuất từ DOM trước
-      let result = await this.extractFromDOM(settings);
-
-      // Bước 2: Nếu DOM không đủ, thử OCR (nếu được bật)
-      if ((!result || result.text.length < settings.minTextLength) && settings.useOCR) {
-        this.log('DOM extraction insufficient, trying OCR...', 'warn');
+      // Bước 2: Nếu DOM không đủ → dùng OCR (nếu bật)
+      if (result.text.length < settings.minTextLength && settings.useOCR) {
+        this.log(`DOM chỉ có ${result.text.length} ký tự → chuyển sang OCR`, 'warn');
         const ocrResult = await this.extractWithOCR(settings);
 
         if (ocrResult && ocrResult.text.length >= settings.minTextLength) {
@@ -144,517 +135,299 @@ class ContentExtractor {
         }
       }
 
-      // Bước 3: Fallback nếu cả hai đều thất bại
-      if (!result || result.text.length < 50) {
-        throw new Error('Không tìm thấy nội dung đủ dài (> 50 ký tự)');
+      // Bước 3: Kiểm tra kết quả cuối cùng
+      if (result.text.length < 50) {
+        throw new Error('Không tìm thấy nội dung hợp lệ');
       }
 
-      // Bước 4: Xử lý và làm sạch văn bản
-      const processedText = this.processText(result.text, settings);
+      // Bước 4: Xử lý văn bản (làm sạch, chia đoạn)
+      const processedText = this.processText(result.text);
 
-      const elapsedTime = ((performance.now() - startTime) / 1000).toFixed(2);
-      this.log(`✅ Extraction completed in ${elapsedTime}s`, 'success');
+      const elapsed = ((performance.now() - startTime) / 1000).toFixed(2);
+      this.log(`✅ Trích xuất thành công trong ${elapsed}s (nguồn: ${result.source})`, 'success');
 
       return {
         success: true,
         text: processedText,
+        lines: processedText.split('\n\n').filter(p => p.trim()),
         source: result.source,
         length: processedText.length,
-        lines: processedText.split('\n').filter(l => l.trim()).length,
-        hasImages: result.hasImages || false,
         ocrUsed: result.source === 'ocr'
       };
 
     } catch (error) {
-      this.log(`❌ Extraction failed: ${error.message}`, 'error');
+      this.log(`❌ Trích xuất thất bại: ${error.message}`, 'error');
       return {
         success: false,
         error: error.message,
         text: '',
         source: 'none',
-        length: 0,
-        lines: 0
+        length: 0
       };
     }
   }
 
   // ============ DOM EXTRACTION ============
-  async extractFromDOM(settings) {
-    try {
-      // Tìm container chính
-      const container = this.findContentContainer();
-      if (!container) {
-        throw new Error('Không tìm thấy container nội dung');
-      }
-
-      this.log(`Found container: ${container.tagName}.${container.className}`);
-
-      // Kiểm tra có canvas không
-      const hasCanvas = container.querySelectorAll('canvas').length > 0;
-
-      // Clone container để không ảnh hưởng DOM gốc
-      const clone = container.cloneNode(true);
-
-      // Loại bỏ các thành phần không cần thiết
-      this.cleanContainer(clone);
-
-      // Trích xuất text
-      let text = '';
-
-      // Thử các phương pháp khác nhau theo độ ưu tiên
-      if (clone.querySelector('canvas')) {
-        // Có canvas, đánh dấu để OCR sau
-        text = this.extractTextFromElement(clone);
-        this.log(`DOM has canvas, text length: ${text.length}`);
-      } else {
-        // Không có canvas, lấy text trực tiếp
-        text = this.extractTextFromElement(clone);
-        this.log(`Text extracted from DOM: ${text.length} chars`);
-      }
-
-      return {
-        text,
-        source: 'dom',
-        hasCanvas,
-        container: container
-      };
-
-    } catch (error) {
-      this.log(`DOM extraction failed: ${error.message}`, 'error');
-      throw error;
+  extractFromDOM() {
+    const container = this.findContentContainer();
+    if (!container) {
+      return { text: '', source: 'dom' };
     }
+
+    this.log(`Tìm thấy container: ${container.tagName}${container.className ? '.' + container.className : ''}`);
+
+    // Clone để xử lý an toàn
+    const clone = container.cloneNode(true);
+    this.cleanContainer(clone);
+
+    const text = this.extractTextFromElement(clone);
+
+    const hasCanvas = container.querySelectorAll('canvas').length > 0;
+
+    return {
+      text,
+      source: 'dom',
+      hasCanvas
+    };
   }
 
   findContentContainer() {
-    // Thử từng selector theo độ ưu tiên
+    // Ưu tiên selector cụ thể
     for (const selector of this.defaultSelectors) {
-      try {
-        const element = document.querySelector(selector);
-        if (element && this.isValidContent(element)) {
-          this.log(`Found content with selector: ${selector}`);
-          return element;
-        }
-      } catch (e) {
-        // Skip invalid selector
+      const el = document.querySelector(selector);
+      if (el && this.isValidContent(el)) {
+        return el;
       }
     }
 
-    // Fallback: Tìm phần tử có nhiều text nhất
-    return this.findContentByTextDensity();
+    // Fallback: tìm theo mật độ text
+    return this.findByTextDensity() || document.body;
   }
 
-  findContentByTextDensity() {
-    const candidates = Array.from(document.querySelectorAll('div, article, section, main'))
+  findByTextDensity() {
+    const candidates = Array.from(document.querySelectorAll('div, article, section, main, .content'))
       .filter(el => {
-        const text = el.textContent || '';
-        return text.length > 100 &&
-          !this.isJunkElement(el) &&
-          this.getTextDensity(el) > 0.1;
+        const text = el.textContent.trim();
+        return text.length > 300 && this.getTextDensity(el) > 0.15 && !this.isJunkElement(el);
       })
-      .sort((a, b) => {
-        // Ưu tiên phần tử có nhiều text hơn
-        const aText = a.textContent.length;
-        const bText = b.textContent.length;
-        return bText - aText;
-      });
+      .sort((a, b) => b.textContent.length - a.textContent.length);
 
     return candidates[0] || null;
   }
 
-  getTextDensity(element) {
-    const text = element.textContent || '';
-    const html = element.innerHTML || '';
+  getTextDensity(el) {
+    const text = el.textContent || '';
+    const html = el.innerHTML || '';
     return text.length / (html.length || 1);
   }
 
-  isValidContent(element) {
-    if (!element || element.offsetWidth < 100 || element.offsetHeight < 100) {
-      return false;
-    }
-
-    const text = element.textContent || '';
-    const html = element.innerHTML || '';
-
-    // Loại bỏ các phần tử có quá nhiều script/style
-    const scriptRatio = (html.match(/<script|<style/g) || []).length / (html.length / 1000);
-    if (scriptRatio > 5) return false;
-
-    // Kiểm tra độ dài text và mật độ text
-    const textLength = text.trim().length;
-    const textDensity = textLength / (html.length || 1);
-
-    return textLength > 200 && textDensity > 0.05;
+  isValidContent(el) {
+    if (!el || el.offsetWidth < 200 || el.offsetHeight < 200) return false;
+    const text = el.textContent.trim();
+    return text.length > 300 && this.getTextDensity(el) > 0.1;
   }
 
-  isJunkElement(element) {
-    const classes = element.className || '';
-    const id = element.id || '';
-
-    const junkPatterns = [
-      'header', 'footer', 'sidebar', 'menu', 'nav',
-      'ad', 'banner', 'promo', 'sponsor', 'popup',
-      'comment', 'related', 'suggest', 'share',
-      'social', 'login', 'register', 'ads'
-    ];
-
-    const patterns = junkPatterns.join('|');
-    const regex = new RegExp(patterns, 'i');
-
-    return regex.test(classes) || regex.test(id) ||
-      element.offsetHeight < 50 ||
-      element.offsetWidth < 50;
+  isJunkElement(el) {
+    const junkKeywords = ['header', 'footer', 'nav', 'sidebar', 'menu', 'ad', 'banner', 'popup', 'comment', 'social', 'share', 'login'];
+    const classId = (el.className || '') + (el.id || '');
+    return junkKeywords.some(kw => classId.toLowerCase().includes(kw));
   }
 
   cleanContainer(container) {
-    const selectorsToRemove = [
-      'script', 'style', 'iframe', 'noscript', 'link', 'meta',
-      'nav', 'header', 'footer', 'aside', 'sidebar',
+    const removeSelectors = [
+      'script', 'style', 'iframe', 'noscript',
+      'nav', 'header', 'footer', 'aside',
       '[class*="ad"]', '[id*="ad"]', '[class*="banner"]',
-      '[class*="popup"]', '[class*="modal"]',
-      '.comments', '.related', '.share', '.social',
-      'ins', 'embed', 'object', 'applet'
+      '.comments', '.share-buttons', '.social'
     ];
 
-    selectorsToRemove.forEach(selector => {
-      const elements = container.querySelectorAll(selector);
-      elements.forEach(el => el.remove());
+    removeSelectors.forEach(sel => {
+      container.querySelectorAll(sel).forEach(el => el.remove());
     });
-
-    // Xóa các phần tử ẩn
-    const hiddenElements = container.querySelectorAll('[style*="display:none"], [style*="display: none"], [style*="visibility:hidden"]');
-    hiddenElements.forEach(el => el.remove());
   }
 
   extractTextFromElement(element) {
-    if (!element) return '';
-
-    // Sử dụng TreeWalker để duyệt các text node
-    const walker = document.createTreeWalker(
-      element,
-      NodeFilter.SHOW_TEXT,
-      {
-        acceptNode: function (node) {
-          // Bỏ qua text node trống hoặc chỉ có khoảng trắng
-          if (!node.textContent || node.textContent.trim().length === 0) {
-            return NodeFilter.FILTER_REJECT;
-          }
-          // Bỏ qua text node trong script/style
-          if (node.parentElement.tagName === 'SCRIPT' ||
-            node.parentElement.tagName === 'STYLE') {
-            return NodeFilter.FILTER_REJECT;
-          }
-          return NodeFilter.FILTER_ACCEPT;
-        }
-      },
-      false
-    );
-
     const textNodes = [];
-    let node = walker.nextNode();
-    while (node) {
-      textNodes.push(node.textContent.trim());
-      node = walker.nextNode();
+    const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT, null, false);
+
+    let node;
+    while ((node = walker.nextNode())) {
+      const text = node.textContent.trim();
+      if (text) textNodes.push(text);
     }
 
-    // Xử lý các thẻ block để thêm dấu xuống dòng
-    const blockElements = element.querySelectorAll('p, div, br, h1, h2, h3, h4, h5, h6, li');
-    blockElements.forEach(el => {
-      if (el.tagName === 'BR') {
-        textNodes.push('\n');
-      }
-    });
-
-    let text = textNodes.join(' ');
-
-    // Chuẩn hóa khoảng trắng và dấu xuống dòng
-    text = text.replace(/\s+/g, ' ')
-      .replace(/\n\s*\n/g, '\n\n')
-      .trim();
-
-    return text;
+    return textNodes.join(' ').replace(/\s+/g, ' ').trim();
   }
 
   // ============ OCR EXTRACTION ============
   async extractWithOCR(settings) {
-    try {
-      // Khởi tạo OCR nếu chưa sẵn sàng
-      const ocrReady = await this.initOCR();
-      if (!ocrReady) {
-        throw new Error('OCR service not available');
-      }
-
-      this.log('Starting OCR extraction...');
-
-      // Tìm tất cả canvas trong container nội dung
-      const container = this.findContentContainer() || document.body;
-      const canvases = Array.from(container.querySelectorAll('canvas'));
-
-      if (canvases.length === 0) {
-        throw new Error('No canvas elements found');
-      }
-
-      this.log(`Found ${canvases.length} canvas elements`);
-
-      let allText = [];
-      let processedCount = 0;
-
-      // Xử lý từng canvas
-      for (const canvas of canvases) {
-        try {
-          // Kiểm tra cache (nếu bật)
-          const cacheKey = this.getCanvasCacheKey(canvas);
-          if (settings.cacheOCR && this.ocrCache.has(cacheKey)) {
-            const cachedText = this.ocrCache.get(cacheKey);
-            allText.push(cachedText);
-            this.log(`Using cached OCR result for canvas ${processedCount + 1}`);
-          } else {
-            // Thực hiện OCR
-            const text = await this.recognizeCanvas(canvas, settings.ocrLanguage);
-
-            if (text && text.trim().length > 0) {
-              allText.push(text);
-
-              // Lưu cache
-              if (settings.cacheOCR) {
-                this.ocrCache.set(cacheKey, text);
-              }
-            }
-          }
-
-          processedCount++;
-
-          // Log progress
-          if (processedCount % 3 === 0 || processedCount === canvases.length) {
-            this.log(`OCR progress: ${processedCount}/${canvases.length} canvases`);
-          }
-
-        } catch (error) {
-          this.log(`OCR failed for canvas ${processedCount}: ${error.message}`, 'warn');
-        }
-      }
-
-      if (allText.length === 0) {
-        throw new Error('No text recognized from canvas');
-      }
-
-      const combinedText = allText.join('\n\n');
-      this.log(`✅ OCR completed: ${combinedText.length} characters recognized`);
-
-      return {
-        text: combinedText,
-        source: 'ocr',
-        canvasCount: canvases.length,
-        processedCount: processedCount
-      };
-
-    } catch (error) {
-      this.log(`OCR extraction failed: ${error.message}`, 'error');
-      throw error;
+    if (!(await this.initOCR())) {
+      throw new Error('OCR không khả dụng');
     }
-  }
 
-  getCanvasCacheKey(canvas) {
-    try {
-      // Tạo cache key từ data URL của canvas
-      return canvas.toDataURL().substring(0, 100);
-    } catch (e) {
-      // Fallback: dùng kích thước và vị trí
-      const rect = canvas.getBoundingClientRect();
-      return `${canvas.width}x${canvas.height}_${rect.top}_${rect.left}`;
+    const container = this.findContentContainer() || document.body;
+    const canvases = Array.from(container.querySelectorAll('canvas'));
+
+    if (canvases.length === 0) {
+      throw new Error('Không tìm thấy canvas nào');
     }
-  }
 
-  async recognizeCanvas(canvas, language = 'vie') {
-    return new Promise((resolve, reject) => {
+    this.log(`Tìm thấy ${canvases.length} canvas → bắt đầu OCR`);
+
+    const results = [];
+
+    for (let i = 0; i < canvases.length; i++) {
+      const canvas = canvases[i];
+      const cacheKey = this.getCanvasHash(canvas);
+
+      if (settings.cacheOCR && this.ocrCache.has(cacheKey)) {
+        results.push(this.ocrCache.get(cacheKey));
+        this.log(`Dùng cache OCR cho canvas ${i + 1}/${canvases.length}`);
+        continue;
+      }
+
       try {
-        // Kiểm tra canvas có dữ liệu không
-        const context = canvas.getContext('2d');
-        const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+        const { data: { text } } = await this.ocrWorker.recognize(canvas);
+        const cleanText = text.trim();
 
-        // Đếm số pixel không trong suốt
-        let nonTransparentPixels = 0;
-        const data = imageData.data;
-        for (let i = 3; i < data.length; i += 4) {
-          if (data[i] > 10) nonTransparentPixels++;
+        if (cleanText.length > 10) {
+          results.push(cleanText);
+          if (settings.cacheOCR) this.ocrCache.set(cacheKey, cleanText);
         }
 
-        // Nếu canvas trống hoặc gần trống
-        if (nonTransparentPixels < 100) {
-          resolve('');
-          return;
-        }
-
-        // Thực hiện OCR với Tesseract
-        Tesseract.recognize(
-          canvas,
-          language,
-          {
-            logger: info => {
-              if (settings.debug) {
-                console.log('OCR progress:', info);
-              }
-            },
-            tessedit_pageseg_mode: Tesseract.PSM.SINGLE_BLOCK
-          }
-        ).then(result => {
-          const text = result.data.text || '';
-          resolve(text.trim());
-        }).catch(reject);
-
-      } catch (error) {
-        reject(error);
+        this.log(`OCR canvas ${i + 1}/${canvases.length}: ${cleanText.length} ký tự`);
+      } catch (err) {
+        this.log(`OCR lỗi canvas ${i + 1}: ${err.message}`, 'warn');
       }
-    });
+    }
+
+    if (results.length === 0) {
+      throw new Error('OCR không nhận diện được văn bản nào');
+    }
+
+    return {
+      text: results.join('\n\n'),
+      source: 'ocr'
+    };
+  }
+
+  getCanvasHash(canvas) {
+    try {
+      // Dùng dataURL hash ngắn làm key
+      const dataUrl = canvas.toDataURL('image/png');
+      return this.simpleHash(dataUrl.substring(0, 200));
+    } catch {
+      return `${canvas.width}x${canvas.height}`;
+    }
+  }
+
+  simpleHash(str) {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      hash = (hash << 5) - hash + str.charCodeAt(i);
+      hash |= 0;
+    }
+    return hash.toString(36);
   }
 
   // ============ TEXT PROCESSING ============
-  processText(text, settings) {
-    if (!text || text.trim().length === 0) return '';
+  processText(rawText) {
+    if (!rawText.trim()) return '';
 
-    // 1. Chia thành dòng
-    let lines = text.split('\n')
-      .map(line => line.trim())
-      .filter(line => line.length > 0);
+    let lines = rawText
+      .split('\n')
+      .map(l => l.trim())
+      .filter(l => l.length > 0);
 
-    // 2. Loại bỏ dòng menu/header/footer
+    // Lọc dòng rác
     lines = this.filterJunkLines(lines);
 
-    // 3. Loại bỏ dòng trùng lặp
-    lines = this.removeDuplicateLines(lines);
+    // Loại trùng
+    lines = this.removeDuplicates(lines);
 
-    // 4. Chia đoạn hợp lý
-    const paragraphs = this.createParagraphs(lines);
-
-    // 5. Join lại thành văn bản hoàn chỉnh
-    return paragraphs.join('\n\n');
+    // Tạo đoạn văn hợp lý
+    return this.groupIntoParagraphs(lines);
   }
 
   filterJunkLines(lines) {
-    const junkPatterns = [
-      // Menu patterns
-      /trang chủ/i, /mục lục/i, /đăng nhập/i, /đăng ký/i,
-      /chương trước/i, /chương sau/i, /chương tiếp/i,
-      /bình luận/i, /thảo luận/i,
-
-      // Advertisement patterns
-      /quảng cáo/i, /sponsored/i, /ads/i,
-
-      // Social media
-      /facebook/i, /twitter/i, /share/i, /like/i,
-
-      // Copyright
-      /copyright/i, /bản quyền/i, /all rights reserved/i,
-
-      // Page navigation
-      /trang \d+\s*\/\s*\d+/i, /page \d+\s*\/\s*\d+/i,
-
-      // Short lines (có thể là số chương)
-      /^chương\s+\d+$/i, /^chapter\s+\d+$/i,
-      /^\d+$/, /^[\d\.]+$/ // Chỉ có số
+    const junkRegex = [
+      /trang chủ|mục lục|đăng nhập|chương trước|chương sau|báo lỗi|quảng cáo|ads|copyright|bản quyền|facebook|twitter|share|like/i,
+      /^chương\s*\d+\s*$/i,
+      /^\d+$/,
+      /^[.!?]{3,}$/,
+      /^[-_=*]{5,}$/
     ];
 
     return lines.filter(line => {
-      // Loại bỏ dòng quá ngắn (trừ số chương)
-      if (line.length < 3 && !/^\d+$/.test(line)) {
-        return false;
-      }
-
-      // Loại bỏ dòng khớp với junk patterns
-      for (const pattern of junkPatterns) {
-        if (pattern.test(line)) {
-          return false;
-        }
-      }
-
-      // Loại bỏ dòng toàn ký tự đặc biệt
-      const specialCharRatio = (line.replace(/[a-zA-ZÀ-ỹ0-9\s]/g, '').length / line.length);
-      if (specialCharRatio > 0.5) {
-        return false;
-      }
-
+      if (line.length < 5) return false;
+      if (junkRegex.some(r => r.test(line))) return false;
       return true;
     });
   }
 
-  removeDuplicateLines(lines) {
+  removeDuplicates(lines) {
     const seen = new Set();
-    const uniqueLines = [];
-
-    for (const line of lines) {
-      const normalized = line.toLowerCase().replace(/\s+/g, ' ');
-
-      // Nếu dòng tương tự đã xuất hiện, bỏ qua
-      if (!seen.has(normalized)) {
-        seen.add(normalized);
-        uniqueLines.push(line);
-      }
-    }
-
-    return uniqueLines;
+    return lines.filter(line => {
+      const norm = line.toLowerCase().replace(/\s+/g, ' ');
+      if (seen.has(norm)) return false;
+      seen.add(norm);
+      return true;
+    });
   }
 
-  createParagraphs(lines) {
+  groupIntoParagraphs(lines) {
     const paragraphs = [];
-    let currentParagraph = [];
+    let current = [];
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
-      const nextLine = lines[i + 1];
+      current.push(line);
 
-      currentParagraph.push(line);
+      const isEndOfParagraph =
+        /[.!?…]"?$/.test(line) ||
+        line.length > 150 ||
+        (lines[i + 1] && lines[i + 1].length < 30) ||
+        !lines[i + 1];
 
-      // Kết thúc đoạn khi:
-      // 1. Dòng hiện tại kết thúc bằng dấu câu kết thúc câu
-      // 2. Dòng tiếp theo trống hoặc là dòng ngắn (có thể là số chương)
-      // 3. Dòng hiện tại rất dài (có thể là đoạn văn)
-
-      const endsWithSentenceEnd = /[.!?…"]$/.test(line.trim());
-      const isLongLine = line.length > 100;
-      const nextIsShort = nextLine && nextLine.length < 20;
-      const nextIsChapter = nextLine && /^(chương|chapter)\s+\d+/i.test(nextLine);
-
-      if (endsWithSentenceEnd || isLongLine || nextIsShort || nextIsChapter || !nextLine) {
-        const paragraphText = currentParagraph.join(' ');
-        if (paragraphText.trim().length > 0) {
-          paragraphs.push(paragraphText);
-        }
-        currentParagraph = [];
+      if (isEndOfParagraph) {
+        paragraphs.push(current.join(' ').trim());
+        current = [];
       }
     }
 
-    // Thêm đoạn cuối nếu còn
-    if (currentParagraph.length > 0) {
-      paragraphs.push(currentParagraph.join(' '));
+    if (current.length) {
+      paragraphs.push(current.join(' ').trim());
     }
 
-    return paragraphs;
+    return paragraphs.filter(p => p.length > 10).join('\n\n');
   }
 
-  // ============ UTILITY METHODS ============
+  // ============ UTILITIES ============
   clearCache() {
     this.ocrCache.clear();
-    this.log('OCR cache cleared');
+    this.log('Đã xóa cache OCR');
   }
 
-  setConfig(newConfig) {
-    this.config = { ...this.config, ...newConfig };
-    this.log('Configuration updated');
+  async terminateOCR() {
+    if (this.ocrWorker) {
+      await this.ocrWorker.terminate();
+      this.ocrWorker = null;
+      this.isOCRReady = false;
+      this.log('OCR worker đã được terminate');
+    }
   }
 
-  getStats() {
-    return {
-      ocrCacheSize: this.ocrCache.size,
-      isOCRReady: this.isOCRReady,
-      config: { ...this.config }
-    };
+  setConfig(config) {
+    this.config = { ...this.config, ...config };
+    this.log('Cấu hình đã cập nhật', this.config);
   }
 }
 
-// Khởi tạo và export module
+// Khởi tạo instance duy nhất
 const contentExtractor = new ContentExtractor();
 
-// Global access for debugging
-if (window) {
+// Global để debug từ console
+if (typeof window !== 'undefined') {
   window.contentExtractor = contentExtractor;
 }
 

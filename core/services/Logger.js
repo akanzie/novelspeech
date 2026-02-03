@@ -1,7 +1,8 @@
 /**
- * Logger Service - Quản lý logging toàn hệ thống
+ * Logger Service - Quản lý logging toàn hệ thống extension
+ * Hỗ trợ các mức log (ERROR, WARN, INFO, DEBUG), lưu lịch sử log,
+ * override console khi debug, và lưu log vào chrome.storage.local
  */
-
 class Logger {
   constructor() {
     this.logLevels = {
@@ -11,23 +12,30 @@ class Logger {
       DEBUG: 3
     };
 
-    this.currentLevel = this.logLevels.INFO;
-    this.logHistory = [];
-    this.maxHistorySize = 100;
+    this.currentLevel = this.logLevels.INFO; // Mức log mặc định
+    this.logHistory = [];                    // Lịch sử log trong memory (mới nhất ở đầu)
+    this.maxHistorySize = 100;               // Giới hạn lịch sử trong memory
 
     this.init();
   }
 
+  /**
+   * Khởi tạo Logger: load mức log từ settings và override console nếu cần
+   */
   init() {
-    // Load log level from settings
+    // Load mức log từ settings (nếu enable debug thì chuyển sang DEBUG)
     this.loadLogLevel();
 
-    // Setup console overrides for debugging
+    // Override các phương thức console để capture log (chỉ khi đang ở mức DEBUG)
     this.setupConsoleOverrides();
 
-    console.log('📝 Logger initialized');
+    console.log('📝 Bộ ghi log đã khởi tạo');
   }
 
+  /**
+   * Load mức log từ chrome.storage (async)
+   * Nếu người dùng bật debug trong settings → chuyển sang mức DEBUG
+   */
   async loadLogLevel() {
     try {
       const result = await chrome.storage.local.get(['settings']);
@@ -35,13 +43,18 @@ class Logger {
         this.currentLevel = this.logLevels.DEBUG;
       }
     } catch (error) {
-      // Use default level
+      // Nếu lỗi storage thì giữ mức mặc định (INFO)
+      console.warn('⚠️ Không thể load mức log từ storage:', error);
     }
   }
 
+  /**
+   * Override các phương thức console để tự động capture log vào history
+   * Chỉ thực hiện khi mức log hiện tại là DEBUG
+   */
   setupConsoleOverrides() {
     if (this.currentLevel >= this.logLevels.DEBUG) {
-      // Save original console methods
+      // Lưu lại các phương thức console gốc để gọi lại
       this.originalConsole = {
         log: console.log,
         warn: console.warn,
@@ -50,7 +63,7 @@ class Logger {
         debug: console.debug
       };
 
-      // Override console methods
+      // Override từng phương thức
       console.log = this.createLogMethod('log', this.logLevels.INFO);
       console.warn = this.createLogMethod('warn', this.logLevels.WARN);
       console.error = this.createLogMethod('error', this.logLevels.ERROR);
@@ -59,103 +72,137 @@ class Logger {
     }
   }
 
+  /**
+   * Tạo phương thức log override
+   * @param {string} method - Tên phương thức console (log, warn, error...)
+   * @param {number} level - Mức độ của phương thức
+   * @returns {Function} Hàm override
+   */
   createLogMethod(method, level) {
     return (...args) => {
-      // Check if we should log this level
+      // Chỉ log nếu mức hiện tại cho phép
       if (level <= this.currentLevel) {
-        // Call original method
+        // Gọi phương thức console gốc để hiển thị bình thường
         this.originalConsole[method](...args);
 
-        // Save to history
+        // Lưu vào lịch sử log
         this.saveToHistory(method.toUpperCase(), args);
       }
     };
   }
 
+  /**
+   * Lưu một entry log vào history
+   * @param {string} level - Mức log (ERROR, WARN, INFO, DEBUG)
+   * @param {Array} args - Các đối số gốc từ console.xxx
+   */
   saveToHistory(level, args) {
     const logEntry = {
       timestamp: new Date().toISOString(),
       level,
       message: args.map(arg =>
-        typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
+        typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
       ).join(' '),
-      module: this.getCallerModule()
+      module: this.getCallerModule() || 'unknown'
     };
 
+    // Thêm vào đầu mảng (mới nhất ở trên cùng)
     this.logHistory.unshift(logEntry);
 
-    // Keep only recent logs
+    // Giới hạn kích thước history trong memory
     if (this.logHistory.length > this.maxHistorySize) {
       this.logHistory.pop();
     }
 
-    // Save to storage periodically
+    // Cứ mỗi 10 log thì lưu vào storage (tránh gọi storage quá thường xuyên)
     if (this.logHistory.length % 10 === 0) {
       this.saveHistoryToStorage();
     }
   }
 
+  /**
+   * Lấy tên module/function caller từ stack trace
+   * (dùng để biết log đến từ đâu - EventHandler, TTSService, v.v.)
+   */
   getCallerModule() {
     try {
       const stack = new Error().stack;
       const lines = stack.split('\n');
 
-      // Skip first 3 lines (Error, getCallerModule, saveToHistory)
-      if (lines.length > 3) {
-        const callerLine = lines[3];
-        const match = callerLine.match(/at\s+(.+?)\s+\(/);
-        if (match) {
-          return match[1];
+      // Bỏ qua các frame nội bộ của Logger (Error, getCallerModule, saveToHistory, createLogMethod...)
+      // Thường caller thực sự nằm ở dòng thứ 4 hoặc sâu hơn
+      for (let i = 3; i < lines.length; i++) {
+        const line = lines[i];
+        const match = line.match(/at\s+(.*?)[\s(]/); // Lấy tên function hoặc file
+        if (match && match[1] && !match[1].includes('Logger')) {
+          return match[1].trim();
         }
       }
     } catch (error) {
-      // Ignore
+      // Ignore lỗi phân tích stack
     }
 
     return 'unknown';
   }
 
+  /**
+   * Lưu lịch sử log vào chrome.storage.local (async)
+   * Giữ tối đa 200 log gần nhất (kết hợp memory + storage cũ)
+   */
   async saveHistoryToStorage() {
     try {
       const result = await chrome.storage.local.get(['systemLogs']);
       const existingLogs = result.systemLogs || [];
 
-      // Combine and keep only last 200 logs
+      // Ghép history hiện tại với log cũ trong storage
       const allLogs = [...this.logHistory, ...existingLogs];
+
+      // Giữ lại 200 log mới nhất
       const limitedLogs = allLogs.slice(0, 200);
 
       await chrome.storage.local.set({ systemLogs: limitedLogs });
     } catch (error) {
-      // Ignore storage errors
+      // Ignore lỗi storage (không làm gián đoạn extension)
+      console.warn('⚠️ Lỗi lưu log vào storage:', error);
     }
   }
 
+  /** Log mức INFO */
   log(message, data = {}) {
     this.logWithLevel('INFO', message, data);
   }
 
+  /** Log mức ERROR */
   error(message, data = {}) {
     this.logWithLevel('ERROR', message, data);
   }
 
+  /** Log mức WARN */
   warn(message, data = {}) {
     this.logWithLevel('WARN', message, data);
   }
 
+  /** Log mức DEBUG */
   debug(message, data = {}) {
     this.logWithLevel('DEBUG', message, data);
   }
 
+  /**
+   * Log với mức chỉ định
+   * @param {string} level - ERROR | WARN | INFO | DEBUG
+   * @param {string} message - Nội dung log chính
+   * @param {Object} data - Dữ liệu bổ sung (object sẽ được in riêng)
+   */
   logWithLevel(level, message, data = {}) {
-    const levelNum = this.logLevels[level] || this.logLevels.INFO;
+    const levelNum = this.logLevels[level.toUpperCase()] || this.logLevels.INFO;
 
     if (levelNum <= this.currentLevel) {
       const timestamp = new Date().toISOString().split('T')[1].split('.')[0];
-      const module = data.module || 'Logger';
+      const module = data.module || this.getCallerModule() || 'unknown';
 
       const logMessage = `[${timestamp}] [${module}] [${level}] ${message}`;
 
-      // Log to console with appropriate method
+      // In ra console bằng phương thức phù hợp
       switch (level) {
         case 'ERROR':
           console.error(logMessage, data);
@@ -170,26 +217,42 @@ class Logger {
           console.log(logMessage, data);
       }
 
-      // Save to history
+      // Lưu vào history (truyền cả message và data riêng để dễ đọc)
       this.saveToHistory(level, [message, data]);
     }
   }
 
+  /**
+   * Lấy lịch sử log gần nhất từ memory
+   * @param {number} limit - Số lượng log trả về (mặc định 50)
+   */
   getLogs(limit = 50) {
     return this.logHistory.slice(0, limit);
   }
 
-  clearLogs() {
+  /** Xóa toàn bộ lịch sử log (memory + storage) */
+  async clearLogs() {
     this.logHistory = [];
-    chrome.storage.local.remove(['systemLogs']);
+    try {
+      await chrome.storage.local.remove(['systemLogs']);
+    } catch (error) {
+      console.warn('⚠️ Lỗi xóa log trong storage:', error);
+    }
   }
 
+  /**
+   * Thiết lập mức log mới
+   * @param {string|number} level - Tên mức (DEBUG, INFO...) hoặc số
+   */
   setLogLevel(level) {
     if (typeof level === 'string') {
-      this.currentLevel = this.logLevels[level.toUpperCase()] || this.logLevels.INFO;
-    } else {
+      this.currentLevel = this.logLevels[level.toUpperCase()] ?? this.logLevels.INFO;
+    } else if (typeof level === 'number') {
       this.currentLevel = level;
     }
+
+    // Nếu thay đổi mức log thì cần reload override console (nếu chuyển sang/khỏi DEBUG)
+    this.setupConsoleOverrides();
   }
 }
 

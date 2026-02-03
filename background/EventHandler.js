@@ -416,7 +416,12 @@ class EventHandler {
   /** Cập nhật cài đặt (tốc độ, giọng nói, âm lượng...) */
   async handleUpdateSettings(settings) {
     try {
-      await this.stateManager.updateState({ settings });
+      const state = await this.stateManager.getState();
+      const mergedSettings = { ...(state.settings || {}), ...(settings || {}) };
+      await this.stateManager.updateState({ settings: mergedSettings });
+      if (settings?.voice) {
+        this.ttsService?.setVoice?.(settings.voice);
+      }
       return { success: true };
     } catch (error) {
       this.logger?.error('Lỗi khi cập nhật settings', { error });
@@ -559,7 +564,7 @@ class EventHandler {
   /** Lấy danh sách giọng nói khả dụng */
   async handleGetVoices() {
     try {
-      const voices = this.ttsService?.getVoices?.() || {};
+      const voices = await this.ttsService?.getVoices?.() || {};
       return { success: true, voices };
     } catch (error) {
       this.logger?.error('Lỗi khi lấy danh sách giọng nói', { error });

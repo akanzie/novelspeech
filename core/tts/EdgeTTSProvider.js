@@ -10,14 +10,15 @@ class EdgeTTSProvider {
     this.isPaused = false;
     this.currentVoice = null;
     this.edgeVoices = [];
-    this.speechSynthesis = (typeof window !== 'undefined' && window.speechSynthesis)
-      ? window.speechSynthesis
-      : null;
+    this.offscreenReady = false;
+    this.offscreenUrl = 'ui/offscreen/tts.html';
   }
 
   async init() {
-    this.loadVoices();
     await this.checkSupport();
+    if (this.available) {
+      await this.loadVoices();
+    }
     return this.available;
   }
 
@@ -32,7 +33,8 @@ class EdgeTTSProvider {
     try {
       const ua = globalThis?.navigator?.userAgent || '';
       const isEdge = ua.includes('Edg/');
-      this.available = isEdge && !!this.speechSynthesis;
+      const canOffscreen = !!globalThis?.chrome?.offscreen?.createDocument;
+      this.available = isEdge && canOffscreen;
       this._log(`Edge TTS san sang (Edge browser: ${isEdge})`, 'INFO');
     } catch (error) {
       this.available = false;
@@ -43,17 +45,13 @@ class EdgeTTSProvider {
   }
 
   loadVoices() {
-    if (!this.speechSynthesis) return;
-    const all = this.speechSynthesis.getVoices();
-    if (all.length === 0) {
-      this.speechSynthesis.onvoiceschanged = () => {
-        this.edgeVoices = this.filterEdgeVoices(this.speechSynthesis.getVoices());
-        this.setDefaultVoice();
-      };
-      return;
-    }
-    this.edgeVoices = this.filterEdgeVoices(all);
-    this.setDefaultVoice();
+    if (!this.available) return;
+    this.getVoices();
+  }
+
+  registerVoicesChanged(handler) {
+    // handled in offscreen
+    void handler;
   }
 
   filterEdgeVoices(voices = []) {
@@ -75,17 +73,25 @@ class EdgeTTSProvider {
     this.currentVoice = vietnamese || this.edgeVoices[0] || null;
   }
 
-  getVoices() {
-    if (this.edgeVoices.length === 0) {
-      this.loadVoices();
+  async getVoices() {
+    if (!this.available) return [];
+    try {
+      await this.ensureOffscreen();
+      const response = await this.sendOffscreen('getVoices', { edgeOnly: true });
+      const voices = Array.isArray(response?.voices) ? response.voices : [];
+      this.edgeVoices = voices;
+      this.setDefaultVoice();
+      return voices.map(v => ({
+        name: v.name,
+        lang: v.lang,
+        localService: v.localService,
+        default: v.default,
+        displayName: v.name
+      }));
+    } catch (error) {
+      this._log('Khong the lay giong doc Edge', 'WARN', { error });
+      return [];
     }
-    return this.edgeVoices.map(v => ({
-      name: v.name,
-      lang: v.lang,
-      localService: v.localService,
-      default: v.default,
-      displayName: v.name
-    }));
   }
 
   setVoice(voiceName) {
@@ -103,98 +109,63 @@ class EdgeTTSProvider {
       return Promise.reject(new Error('Edge TTS is not available'));
     }
 
-    if (!this.speechSynthesis) {
-      return Promise.reject(new Error('Edge Web Speech is not available'));
+    await this.ensureOffscreen();
+
+    this.isSpeaking = true;
+    this.isPaused = false;
+    settings.onStart();
+
+    const voiceName = typeof settings.voice === 'string'
+      ? settings.voice
+      : settings.voice?.name || settings.voice?.voiceName || this.currentVoice?.name;
+
+    try {
+      await this.sendOffscreen('speak', {
+        text,
+        rate: settings.rate,
+        pitch: settings.pitch,
+        volume: settings.volume,
+        voiceName
+      });
+      this.isSpeaking = false;
+      settings.onEnd();
+      return;
+    } catch (error) {
+      this.isSpeaking = false;
+      settings.onError(error);
+      return Promise.reject(error);
     }
-
-    return new Promise((resolve, reject) => {
-      try {
-        this.speechSynthesis.cancel();
-        const utterance = new SpeechSynthesisUtterance(text);
-
-        const resolvedVoice = typeof settings.voice === 'string'
-          ? this.edgeVoices.find(v => v.name === settings.voice)
-          : settings.voice;
-
-        utterance.rate = settings.rate;
-        utterance.pitch = settings.pitch;
-        utterance.volume = settings.volume;
-        utterance.voice = resolvedVoice || this.currentVoice;
-
-        utterance.onstart = () => {
-          this.isSpeaking = true;
-          this.isPaused = false;
-          settings.onStart();
-        };
-
-        utterance.onend = () => {
-          this.isSpeaking = false;
-          settings.onEnd();
-          resolve();
-        };
-
-        utterance.onerror = (event) => {
-          this.isSpeaking = false;
-          settings.onError(event);
-          reject(new Error(`Edge speech error: ${event.error}`));
-        };
-
-        utterance.onpause = () => {
-          this.isPaused = true;
-          settings.onPause();
-        };
-
-        utterance.onresume = () => {
-          this.isPaused = false;
-          settings.onResume();
-        };
-
-        this.speechSynthesis.speak(utterance);
-      } catch (error) {
-        reject(error);
-      }
-    });
   }
 
   pause() {
-    if (this.speechSynthesis && this.isSpeaking && !this.isPaused) {
-      this.speechSynthesis.pause();
+    if (!this.available) return false;
+    if (this.isSpeaking && !this.isPaused) {
       this.isPaused = true;
+      this.sendOffscreen('pause');
       return true;
     }
-    if (this.fallback?.pause) {
-      this.isPaused = true;
-      return this.fallback.pause();
-    }
-    return false;
+    return this.fallback?.pause ? this.fallback.pause() : false;
   }
 
   resume() {
-    if (this.speechSynthesis && this.isSpeaking && this.isPaused) {
-      this.speechSynthesis.resume();
+    if (!this.available) return false;
+    if (this.isSpeaking && this.isPaused) {
       this.isPaused = false;
+      this.sendOffscreen('resume');
       return true;
     }
-    if (this.fallback?.resume) {
-      this.isPaused = false;
-      return this.fallback.resume();
-    }
-    return false;
+    return this.fallback?.resume ? this.fallback.resume() : false;
   }
 
   stop() {
-    if (this.speechSynthesis && this.isSpeaking) {
-      this.speechSynthesis.cancel();
+    if (!this.available) return false;
+    if (this.isSpeaking) {
       this.isSpeaking = false;
       this.isPaused = false;
+      this.sendOffscreen('stop');
       return true;
     }
-    if (this.fallback?.stop) {
-      this.isSpeaking = false;
-      this.isPaused = false;
-      return this.fallback.stop();
-    }
-    return false;
+    return this.fallback?.stop ? this.fallback.stop() : false;
   }
 
   getStatus() {
@@ -214,6 +185,32 @@ class EdgeTTSProvider {
     if (globalThis.LogService?.log) {
       globalThis.LogService.log('EdgeTTSProvider', message, level, data);
     }
+  }
+
+  async ensureOffscreen() {
+    if (this.offscreenReady) return;
+    const offscreen = globalThis?.chrome?.offscreen;
+    if (!offscreen?.createDocument) {
+      throw new Error('Offscreen API is not available');
+    }
+    const hasDocument = await offscreen.hasDocument();
+    if (!hasDocument) {
+      await offscreen.createDocument({
+        url: this.offscreenUrl,
+        reasons: ['AUDIO_PLAYBACK'],
+        justification: 'Text to speech playback'
+      });
+    }
+    this.offscreenReady = true;
+  }
+
+  async sendOffscreen(action, payload = {}) {
+    const message = { type: 'ttsOffscreen', action, payload };
+    const response = await chrome.runtime.sendMessage(message);
+    if (response?.success === false) {
+      throw new Error(response?.error || 'Offscreen TTS failed');
+    }
+    return response;
   }
 }
 

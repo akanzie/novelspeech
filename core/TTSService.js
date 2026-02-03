@@ -78,23 +78,33 @@ class TTSService {
         this.edgeProvider.init()
       ]);
 
-      this.syncDefaultVoice();
+      await this.syncDefaultVoice();
       this.log('TTS Service da khoi tao', 'info');
     } catch (error) {
       this.log('Loi khoi tao TTS Service', 'error', { error });
     }
   }
 
-  syncDefaultVoice() {
+  async syncDefaultVoice() {
     if (this.currentVoice) return;
-    const edgeVoices = this.edgeProvider.getVoices();
+    const pickVietnamese = (voices, nameKey = 'name') => {
+      if (!Array.isArray(voices) || voices.length === 0) return null;
+      const vi = voices.find(v => (v.lang || '').toLowerCase().startsWith('vi'));
+      return (vi && vi[nameKey]) ? vi[nameKey] : (voices[0][nameKey] || null);
+    };
+
+    const edgeVoices = await this.edgeProvider.getVoices();
     if (this.edgeProvider.isAvailable() && edgeVoices.length > 0) {
-      this.currentVoice = edgeVoices[0].name || null;
+      this.currentVoice = pickVietnamese(edgeVoices, 'name');
       return;
     }
-    const webStatus = this.webProvider.getStatus();
-    const chromeStatus = this.chromeProvider.getStatus();
-    this.currentVoice = webStatus.currentVoice || chromeStatus.currentVoice || null;
+
+    const webVoices = this.webProvider.getVoices();
+    const chromeVoices = this.chromeProvider.getVoices();
+    this.currentVoice =
+      pickVietnamese(webVoices, 'name') ||
+      pickVietnamese(chromeVoices, 'voiceName') ||
+      null;
   }
 
   resolveProviders(options = {}) {
@@ -175,6 +185,14 @@ class TTSService {
 
       try {
         this.activeProvider = provider;
+        const providerName = provider?.constructor?.name || 'Provider';
+        const selectedVoice = typeof providerSettings.voice === 'string'
+          ? providerSettings.voice
+          : (providerSettings.voice?.name || providerSettings.voice?.voiceName || this.currentVoice || 'default');
+        this.log(`TTS use provider: ${providerName}`, 'info', {
+          engine: options.engine || options?.settings?.engine,
+          voice: selectedVoice
+        });
         await provider.speak(text, providerSettings);
         return;
       } catch (error) {
@@ -224,10 +242,10 @@ class TTSService {
     return stopped;
   }
 
-  getVoices() {
+  async getVoices() {
     return {
       webSpeech: this.webProvider.getVoices(),
-      edgeTTS: this.edgeProvider.getVoices(),
+      edgeTTS: await this.edgeProvider.getVoices(),
       chromeTTS: this.chromeProvider.getVoices()
     };
   }

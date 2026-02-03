@@ -6,6 +6,7 @@
   "permissions": [
     "activeTab",
     "alarms",
+    "offscreen",
     "storage",
     "sidePanel",
     "tts"

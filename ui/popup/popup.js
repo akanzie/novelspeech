@@ -449,6 +449,7 @@
     mapSettingsFromStorage(settings) {
       if (settings?.tts || settings?.appearance || settings?.advanced || settings?.general) {
         return {
+          engine: settings.tts?.engine ?? 'edge',
           rate: settings.tts?.defaultSpeed ?? 1.0,
           pitch: settings.tts?.defaultPitch ?? 1.0,
           volume: settings.tts?.volume ?? 1.0,
@@ -467,6 +468,7 @@
           ...existing,
           tts: {
             ...(existing.tts || {}),
+            engine: current.engine ?? existing.tts?.engine,
             defaultSpeed: current.rate ?? existing.tts?.defaultSpeed,
             defaultPitch: current.pitch ?? existing.tts?.defaultPitch,
             volume: Math.round((current.volume ?? 1.0) * 100),

@@ -27,13 +27,26 @@ class WebSpeechProvider {
     if (!this.speechSynthesis) return;
     this.voices = this.speechSynthesis.getVoices();
     if (this.voices.length === 0) {
-      this.speechSynthesis.onvoiceschanged = () => {
+      this.registerVoicesChanged(() => {
         this.voices = this.speechSynthesis.getVoices();
         this.setDefaultVoice();
-      };
+      });
     } else {
       this.setDefaultVoice();
     }
+  }
+
+  registerVoicesChanged(handler) {
+    if (!this.speechSynthesis) return;
+    if (typeof this.speechSynthesis.addEventListener === 'function') {
+      this.speechSynthesis.addEventListener('voiceschanged', handler);
+      return;
+    }
+    const prev = this.speechSynthesis.onvoiceschanged;
+    this.speechSynthesis.onvoiceschanged = () => {
+      if (typeof prev === 'function') prev();
+      handler();
+    };
   }
 
   setDefaultVoice() {
@@ -69,16 +82,33 @@ class WebSpeechProvider {
 
     return new Promise((resolve, reject) => {
       try {
+        const currentVoices = this.voices.length > 0
+          ? this.voices
+          : (this.speechSynthesis.getVoices() || []);
+        if (currentVoices.length > 0 && this.voices.length === 0) {
+          this.voices = currentVoices;
+          this.setDefaultVoice();
+        }
+
         this.currentUtterance = new SpeechSynthesisUtterance(text);
 
         const resolvedVoice = typeof settings.voice === 'string'
-          ? this.voices.find(v => v.name === settings.voice)
+          ? currentVoices.find(v => v.name === settings.voice)
           : settings.voice;
+        const vietnameseVoice = currentVoices.find(voice =>
+          voice.lang === 'vi-VN' || (voice.lang && voice.lang.startsWith('vi'))
+        );
 
         this.currentUtterance.rate = settings.rate;
         this.currentUtterance.pitch = settings.pitch;
         this.currentUtterance.volume = settings.volume;
-        this.currentUtterance.voice = resolvedVoice || this.currentVoice;
+        this.currentUtterance.lang = 'vi-VN';
+        this.currentUtterance.voice = resolvedVoice || vietnameseVoice || this.currentVoice || null;
+        if (this.currentUtterance.voice) {
+          this._log(`Su dung giong doc: ${this.currentUtterance.voice.name}`, 'INFO');
+        } else {
+          this._log('Khong tim thay giong doc phu hop, se dung giong mac dinh', 'WARN');
+        }
 
         this.currentUtterance.onstart = () => {
           this.isSpeaking = true;

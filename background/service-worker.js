@@ -184,6 +184,149 @@ class BackgroundService {
     chrome.runtime.onSuspend.addListener(() => {
       this.clearOcrCacheOnShutdown();
     });
+
+    chrome.runtime.onStartup.addListener(async () => {
+      await this.handleStartup();
+    });
+
+    chrome.action.onClicked.addListener(async (tab) => {
+      if (!tab?.id || !this.isTargetSite(tab?.url)) return;
+      await this.startFromBeginning(tab.id);
+    });
+
+    chrome.tabs.onCreated.addListener(() => {
+      // no-op
+    });
+
+    chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
+      if (changeInfo.status !== 'complete') return;
+      if (!this.isTargetSite(tab?.url)) return;
+      await this.handleTabUpdated(tabId);
+    });
+
+    chrome.tabs.onRemoved.addListener(async (tabId) => {
+      await this.handleTabRemoved(tabId);
+    });
+
+    chrome.webNavigation.onCompleted.addListener(async (details) => {
+      if (!this.isTargetSite(details?.url)) return;
+      await this.handleWebNavigationCompleted(details.tabId);
+    });
+  }
+
+  async handleStartup() {
+    this.logger?.log('Extension startup', { reason: 'startup' });
+    await this.ensureDefaultSettings();
+  }
+
+  async ensureDefaultSettings() {
+    const storageKey = CONFIG?.STORAGE_KEYS?.USER_SETTINGS || 'userSettings';
+    try {
+      let existing = null;
+      if (globalThis.StorageService?.getUserSettings) {
+        existing = await globalThis.StorageService.getUserSettings();
+      } else {
+        const result = await chrome.storage.local.get([storageKey]);
+        existing = result[storageKey] || null;
+      }
+      if (!existing) {
+        await this.setupDefaultSettings();
+      } else {
+        await this.migrateSettings();
+      }
+    } catch (error) {
+      this.logger?.error('Lỗi kiểm tra settings khi startup', { error });
+    }
+  }
+
+  isTargetSite(url = '') {
+    try {
+      const parsed = new URL(url);
+      return parsed.hostname.includes('metruyencv.com');
+    } catch {
+      return false;
+    }
+  }
+
+  async startFromBeginning(tabId) {
+    try {
+      await this.stateManager.updateState({
+        status: STATUS.LOADING || 'loading',
+        currentLine: 0,
+        totalLines: 0,
+        content: [],
+        autoContinue: false
+      });
+      await this.eventHandler.handleStartReading({ startLine: 0 }, tabId);
+    } catch (error) {
+      this.logger?.error('Lỗi khởi tạo đọc từ đầu', { error });
+    }
+  }
+
+  async handleTabUpdated(tabId) {
+    try {
+      const state = await this.stateManager.getState();
+      const status = state?.status;
+      const inProgress = status &&
+        status !== (STATUS.STOPPED || 'stopped') &&
+        status !== (STATUS.FINISHED || 'finished') &&
+        status !== (STATUS.ERROR || 'error');
+
+      if (!inProgress) return;
+
+      const content = await this.eventHandler.extractContentFromTab(tabId);
+      if (content?.success) {
+        await this.stateManager.updateState({
+          chapterUrl: content.metadata?.chapterUrl || state.chapterUrl,
+          chapterTitle: content.metadata?.chapterTitle || state.chapterTitle,
+          storyTitle: content.metadata?.storyTitle || state.storyTitle,
+          content: content.lines || [],
+          totalLines: Array.isArray(content.lines) ? content.lines.length : state.totalLines
+        });
+      }
+
+      if (status === (STATUS.PLAYING || 'playing')) {
+        await this.eventHandler.handleStartReading({ startLine: state.currentLine || 0 }, tabId);
+      }
+    } catch (error) {
+      this.logger?.error('Lỗi khi xử lý tab updated', { error });
+    }
+  }
+
+  async handleTabRemoved(tabId) {
+    try {
+      const state = await this.stateManager.getState();
+      if (state?.chapterUrl) {
+        await this.ttsService?.stop?.();
+        await this.stateManager.updateState({
+          status: STATUS.STOPPED || 'stopped',
+          chapterUrl: '',
+          chapterTitle: '',
+          storyTitle: '',
+          content: [],
+          currentLine: 0,
+          totalLines: 0,
+          autoContinue: false
+        });
+      }
+    } catch (error) {
+      this.logger?.error('Lỗi khi xử lý tab removed', { error, tabId });
+    }
+  }
+
+  async handleWebNavigationCompleted(tabId) {
+    try {
+      const state = await this.stateManager.getState();
+      const shouldContinue = state?.autoContinue === true;
+      const isPlaying = state?.status === (STATUS.PLAYING || 'playing');
+      if (!shouldContinue && !isPlaying) return;
+
+      await this.stateManager.updateState({ autoContinue: false });
+      const startLine = shouldContinue ? 0 : (state.currentLine || 0);
+      await this.eventHandler.handleStartReading({ startLine }, tabId);
+    } catch (error) {
+      this.logger?.error('Lỗi khi xử lý webNavigation completed', { error });
+    }
   }
 
   /**

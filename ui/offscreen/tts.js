@@ -33,7 +33,7 @@ function getVoicesOnce() {
   return voices;
 }
 
-function getVoicesWithWait(timeoutMs = 500) {
+function getVoicesWithWait(timeoutMs = 1500) {
   if (!speechSynthesis) return Promise.resolve([]);
   const initial = getVoicesOnce();
   if (initial.length > 0) return Promise.resolve(initial);
@@ -83,6 +83,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       sendResponse({ success: true, voices });
     });
     return true;
+  }
+
+  if (action === 'ping') {
+    sendResponse({ success: true });
+    return;
   }
 
   if (action === 'speak') {

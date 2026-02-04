@@ -77,7 +77,20 @@ class EdgeTTSProvider {
     if (!this.available) return [];
     try {
       await this.ensureOffscreen();
-      const response = await this.sendOffscreen('getVoices', { edgeOnly: true });
+      let response = null;
+      let lastError = null;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          response = await this.sendOffscreen('getVoices', { edgeOnly: true });
+          break;
+        } catch (error) {
+          lastError = error;
+          await new Promise(r => setTimeout(r, 300));
+        }
+      }
+      if (!response) {
+        throw lastError || new Error('Offscreen TTS not ready');
+      }
       const voices = Array.isArray(response?.voices) ? response.voices : [];
       this.edgeVoices = voices;
       this.setDefaultVoice();
@@ -89,7 +102,7 @@ class EdgeTTSProvider {
         displayName: v.name
       }));
     } catch (error) {
-      this._log('Khong the lay giong doc Edge', 'WARN', { error });
+      this._log('Khong the lay giong doc Edge', 'WARN', { error: error?.message || String(error) });
       return [];
     }
   }
@@ -201,7 +214,22 @@ class EdgeTTSProvider {
         justification: 'Text to speech playback'
       });
     }
+    await this.waitForOffscreenReady();
     this.offscreenReady = true;
+  }
+
+  async waitForOffscreenReady() {
+    let lastError = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        await this.sendOffscreen('ping');
+        return;
+      } catch (error) {
+        lastError = error;
+        await new Promise(r => setTimeout(r, 200));
+      }
+    }
+    throw lastError || new Error('Offscreen TTS not ready');
   }
 
   async sendOffscreen(action, payload = {}) {

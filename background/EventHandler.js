@@ -316,9 +316,18 @@ class EventHandler {
       // Đã đọc xong toàn bộ chương
       await this.stateManager.updateState({
         status: STATUS.FINISHED || 'finished',
-        currentLine: 0
+        currentLine: 0,
+        autoContinue: true
       });
       this.logger?.log('✅ Đã đọc xong chương');
+      try {
+        const tabId = await this.getActiveTabId();
+        if (tabId) {
+          await this.handleNavigateChapter('next', tabId);
+        }
+      } catch (error) {
+        this.logger?.error('Lỗi khi tự chuyển chương', { error });
+      }
     }
   }
 

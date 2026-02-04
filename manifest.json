@@ -9,7 +9,9 @@
     "offscreen",
     "storage",
     "sidePanel",
-    "tts"
+    "tts",
+    "tabs",
+    "webNavigation"
   ],
   "host_permissions": [
     "*://*/*"

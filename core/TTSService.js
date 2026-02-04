@@ -74,7 +74,6 @@ class TTSService {
     try {
       await Promise.all([
         this.webProvider.init(),
-        this.chromeProvider.init(),
         this.edgeProvider.init()
       ]);
 

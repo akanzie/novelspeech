@@ -27,7 +27,31 @@ class EventHandler {
   async init() {
     // Lắng nghe tin nhắn từ content script hoặc popup
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-      return this.handleMessage(message, sender, sendResponse);
+      let responded = false;
+      const timeout = setTimeout(() => {
+        if (responded) return;
+        responded = true;
+        sendResponse({ success: false, error: 'Timeout waiting for response' });
+      }, 8000);
+
+      this.handleMessage(message, sender)
+        .then((response) => {
+          if (responded) return;
+          responded = true;
+          clearTimeout(timeout);
+          sendResponse(response);
+        })
+        .catch((error) => {
+          if (responded) return;
+          responded = true;
+          clearTimeout(timeout);
+          sendResponse({
+            success: false,
+            error: error?.message || String(error),
+            stack: error?.stack
+          });
+        });
+      return true;
     });
 
     // Lắng nghe kết nối dài (port) từ content script hoặc popup
@@ -63,10 +87,9 @@ class EventHandler {
    * Xử lý tin nhắn nhận được từ các thành phần khác
    * @param {Object} message - Tin nhắn
    * @param {Object} sender - Thông tin người gửi
-   * @param {Function} sendResponse - Hàm trả về response
-   * @returns {boolean} true để báo hiệu response bất đồng bộ
+   * @returns {Object} response
    */
-  async handleMessage(message, sender, sendResponse) {
+  async handleMessage(message, sender) {
     this.logger?.log(`📨 Đã nhận tin nhắn: ${message.type}`, { type: message.type, message });
 
     try {
@@ -129,18 +152,15 @@ class EventHandler {
         default:
           response = { success: false, error: 'Loại tin nhắn không xác định' };
       }
-      sendResponse(response);
+      return response;
     } catch (error) {
       this.logger?.error('Lỗi xử lý tin nhắn', { error });
-      sendResponse({
+      return {
         success: false,
         error: error.message,
         stack: error.stack
-      });
+      };
     }
-
-    // Trả về true để cho phép response bất đồng bộ
-    return true;
   }
 
   /**
@@ -151,9 +171,17 @@ class EventHandler {
     this.logger?.log('🔗 Đã thiết lập kết nối', { portName: port.name });
 
     port.onMessage.addListener((message) => {
-      this.handleMessage(message, { tab: { id: port.sender?.tab?.id } }, (response) => {
-        port.postMessage({ ...response, _id: message._id });
-      });
+      this.handleMessage(message, { tab: { id: port.sender?.tab?.id } })
+        .then((response) => {
+          port.postMessage({ ...response, _id: message._id });
+        })
+        .catch((error) => {
+          port.postMessage({
+            success: false,
+            error: error?.message || String(error),
+            _id: message._id
+          });
+        });
     });
 
     port.onDisconnect.addListener(() => {

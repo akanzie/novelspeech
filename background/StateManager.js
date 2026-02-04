@@ -15,6 +15,7 @@ class StateManager {
   constructor() {
     this.state = {
       status: STATUS.STOPPED || 'stopped', // stopped, playing, paused, error, finished
+      tabId: null, // tab đang đọc (để tránh 2 tab cùng play gây nhiễu)
       chapterUrl: '',
       chapterTitle: '',
       storyTitle: '',
@@ -201,6 +202,7 @@ class StateManager {
 
     this.state = {
       status: STATUS.STOPPED || 'stopped',
+      tabId: null,
       chapterUrl: '',
       chapterTitle: '',
       storyTitle: '',

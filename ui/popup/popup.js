@@ -24,6 +24,10 @@
       };
 
       this.statusPolling = null;
+
+      // Prevent spamming commands when user clicks rapidly
+      this._commandLocks = new Map(); // group -> Promise in-flight
+      this._lastCommandAt = new Map(); // group -> timestamp
     }
 
     initElements() {
@@ -65,7 +69,6 @@
         darkModeToggle: document.getElementById('darkModeToggle'),
 
         // Menu
-        btnOpenSidepanel: document.getElementById('btnOpenSidepanel'),
         btnSettings: document.getElementById('btnSettings'),
         btnHelp: document.getElementById('btnHelp')
       };
@@ -104,7 +107,6 @@
       );
 
       // Menu
-      this.elements.btnOpenSidepanel.addEventListener('click', () => this.openSidepanel());
       this.elements.btnSettings.addEventListener('click', () => this.openOptionsPage());
       this.elements.btnHelp.addEventListener('click', () => this.showHelp());
 
@@ -208,12 +210,79 @@
       }
     }
 
+    /**
+     * Override BaseUI.sendCommand:
+     * - lock per command group to avoid parallel sends
+     * - apply small cooldown to player controls to avoid double-click spam
+     */
+    async sendCommand(command, data = {}) {
+      const playerCommands = new Set([
+        MESSAGES.START_READING || 'startReading',
+        MESSAGES.PAUSE_READING || 'pauseReading',
+        MESSAGES.RESUME_READING || 'resumeReading',
+        MESSAGES.STOP_READING || 'stopReading',
+        MESSAGES.NEXT_LINE || 'nextLine',
+        MESSAGES.PREV_LINE || 'prevLine',
+        MESSAGES.NEXT_CHAPTER || 'nextChapter',
+        MESSAGES.PREV_CHAPTER || 'prevChapter',
+        MESSAGES.SWITCH_CHAPTER || 'switchChapter'
+      ]);
+
+      const settingsCommands = new Set([
+        MESSAGES.UPDATE_SETTINGS || 'updateSettings'
+      ]);
+
+      const group = settingsCommands.has(command)
+        ? 'settings'
+        : (playerCommands.has(command) ? 'player' : 'default');
+
+      const cooldownMs = group === 'player' ? 250 : 0;
+      const now = Date.now();
+      const last = this._lastCommandAt.get(group) || 0;
+      if (cooldownMs > 0 && (now - last) < cooldownMs) {
+        return { success: false, ignored: true };
+      }
+
+      const inFlight = this._commandLocks.get(group);
+      if (inFlight) {
+        return { success: false, ignored: true };
+      }
+
+      this._lastCommandAt.set(group, now);
+
+      const promise = (async () => {
+        try {
+          // Use SharedServices directly (avoid BaseUI "Thành công" toast spam)
+          const response = await this.services.sendMessage(command, data);
+          if (response && response.success === false && response.error) {
+            // Only show error; success is reflected in UI state update
+            this.services.showNotification(response.error, 'error');
+          }
+          return response;
+        } catch (error) {
+          this.handleError(error, `Command: ${command}`);
+          return { success: false, error: error.message };
+        } finally {
+          this._commandLocks.delete(group);
+        }
+      })();
+
+      this._commandLocks.set(group, promise);
+      return promise;
+    }
+
     async startReading() {
       try {
         // Get active tab
         const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
         if (!tabs[0]) {
           this.services.showNotification('Không tìm thấy tab nào', 'error');
+          return;
+        }
+
+        const url = tabs[0].url || '';
+        if (!this.isTargetChapterUrl(url)) {
+          this.services.showNotification('Chỉ hỗ trợ trang chương: metruyencv.com/truyen/x/chuong-y', 'warning');
           return;
         }
 
@@ -231,6 +300,17 @@
 
       } catch (error) {
         this.handleError(error, 'startReading');
+      }
+    }
+
+    isTargetChapterUrl(url = '') {
+      try {
+        const parsed = new URL(url);
+        if (!parsed.hostname.includes('metruyencv.com')) return false;
+        const path = parsed.pathname || '';
+        return /^\/truyen\/[^/]+\/chuong-\d+\/?$/i.test(path);
+      } catch {
+        return false;
       }
     }
 
@@ -608,17 +688,6 @@
       }
     }
 
-    async openSidepanel() {
-      try {
-        if (chrome.sidePanel?.open) {
-          await chrome.sidePanel.open({ windowId: chrome.windows.WINDOW_ID_CURRENT });
-        } else {
-          this.services.showNotification('Side panel không khả dụng', 'warning');
-        }
-      } catch (error) {
-        this.handleError(error, 'openSidepanel');
-      }
-    }
 
     openOptionsPage() {
       chrome.runtime.openOptionsPage();

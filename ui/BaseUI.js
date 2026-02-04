@@ -123,6 +123,9 @@ class BaseUI {
       if (response && response.success) {
         this.services.showNotification('Thành công', 'success');
       } else if (response && response.error) {
+        if (response.ignored) {
+          return response;
+        }
         throw new Error(response.error);
       }
 

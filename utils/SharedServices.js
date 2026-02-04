@@ -91,6 +91,17 @@
       try {
         return await chrome.runtime.sendMessage({ type, data });
       } catch (error) {
+        const message = String(error?.message || error || '');
+        if (message.includes('message channel closed before a response was received')) {
+          if (globalThis.LogService?.debug) {
+            globalThis.LogService.debug('SharedServices', 'Message channel closed before response', { type, data, error: message });
+          } else if (globalThis.LogService?.log) {
+            globalThis.LogService.log('SharedServices', 'Message channel closed before response', 'DEBUG', { type, data, error: message });
+          } else {
+            console.debug('[SharedServices] Message channel closed before response', { type, error: message });
+          }
+          return { success: false, ignored: true, error: message };
+        }
         if (globalThis.LogService?.warn) {
           globalThis.LogService.warn('SharedServices', 'Message send error', { error });
         } else {

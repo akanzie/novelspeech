@@ -57,6 +57,22 @@
             </label>
             <p class="setting-description">Lưu lại lịch sử các chương đã đọc</p>
           </div>
+
+          <div class="setting-item">
+            <label>
+              <input type="checkbox" id="autoScroll">
+              Tự động cuộn
+            </label>
+            <p class="setting-description">Tự động cuộn đến câu đang đọc</p>
+          </div>
+
+          <div class="setting-item">
+            <label>
+              <input type="checkbox" id="highlight">
+              Highlight dòng đang đọc
+            </label>
+            <p class="setting-description">Đánh dấu câu/đoạn đang đọc</p>
+          </div>
         </div>
 
         <div class="settings-group">
@@ -78,7 +94,8 @@
             <select id="ttsEngine">
               <option value="edge">Edge TTS (Mặc định)</option>
               <option value="web_speech">Web Speech API</option>
-              <option value="custom">API tùy chỉnh</option>
+              <option value="chrome_tts">Chrome TTS</option>
+              <option value="custom_api">API tùy chỉnh</option>
             </select>
           </div>
 
@@ -102,6 +119,10 @@
             <div class="slider-item">
               <label for="defaultPitch">Cao độ: <span id="pitchValue">1.0</span></label>
               <input type="range" id="defaultPitch" min="0.5" max="1.5" step="0.1" value="1.0">
+            </div>
+            <div class="slider-item">
+              <label for="defaultVolume">Âm lượng: <span id="volumeValue">100</span>%</label>
+              <input type="range" id="defaultVolume" min="0" max="100" step="1" value="100">
             </div>
           </div>
         </div>
@@ -162,6 +183,10 @@
               Cache kết quả OCR
             </label>
             <p class="setting-description">Lưu kết quả OCR để tăng tốc độ xử lý</p>
+          </div>
+          <div class="setting-item">
+            <label for="maxCacheSize">Dung lượng cache tối đa</label>
+            <input type="number" id="maxCacheSize" min="10" max="1000" value="100">
           </div>
         </div>
 

@@ -30,6 +30,8 @@ class StoryReaderOptions extends BaseUI {
       autoStart: document.getElementById('autoStart'),
       autoNextChapter: document.getElementById('autoNextChapter'),
       saveHistory: document.getElementById('saveHistory'),
+      autoScroll: document.getElementById('autoScroll'),
+      highlight: document.getElementById('highlight'),
       pageLoadTimeout: document.getElementById('pageLoadTimeout'),
 
       // TTS Tab
@@ -37,8 +39,10 @@ class StoryReaderOptions extends BaseUI {
       defaultVoice: document.getElementById('defaultVoice'),
       defaultSpeed: document.getElementById('defaultSpeed'),
       defaultPitch: document.getElementById('defaultPitch'),
+      defaultVolume: document.getElementById('defaultVolume'),
       speedValue: document.getElementById('speedValue'),
       pitchValue: document.getElementById('pitchValue'),
+      volumeValue: document.getElementById('volumeValue'),
 
       // Appearance Tab
       themeOptions: document.querySelectorAll('.theme-option'),
@@ -90,6 +94,12 @@ class StoryReaderOptions extends BaseUI {
     this.elements.saveHistory.addEventListener('change',
       this.debounce(() => this.onGeneralSettingChange('saveHistory', this.elements.saveHistory.checked), 300)
     );
+    this.elements.autoScroll.addEventListener('change',
+      this.debounce(() => this.onGeneralSettingChange('autoScroll', this.elements.autoScroll.checked), 300)
+    );
+    this.elements.highlight.addEventListener('change',
+      this.debounce(() => this.onGeneralSettingChange('highlight', this.elements.highlight.checked), 300)
+    );
     this.elements.pageLoadTimeout.addEventListener('change',
       this.debounce(() => this.onGeneralSettingChange('pageLoadTimeout', parseInt(this.elements.pageLoadTimeout.value)), 300)
     );
@@ -110,6 +120,11 @@ class StoryReaderOptions extends BaseUI {
       const pitch = parseFloat(e.target.value);
       this.elements.pitchValue.textContent = pitch.toFixed(1);
       this.onTtsSettingChange('defaultPitch', pitch);
+    });
+    this.elements.defaultVolume.addEventListener('input', (e) => {
+      const volume = parseInt(e.target.value, 10);
+      this.elements.volumeValue.textContent = volume;
+      this.onTtsSettingChange('volume', volume);
     });
 
     // Appearance Tab
@@ -206,6 +221,8 @@ class StoryReaderOptions extends BaseUI {
     this.elements.autoStart.checked = this.settings.general.autoStart;
     this.elements.autoNextChapter.checked = this.settings.general.autoNextChapter;
     this.elements.saveHistory.checked = this.settings.general.saveHistory;
+    this.elements.autoScroll.checked = this.settings.general.autoScroll;
+    this.elements.highlight.checked = this.settings.general.highlight;
     this.elements.pageLoadTimeout.value = this.settings.general.pageLoadTimeout;
 
     // TTS Tab
@@ -215,6 +232,8 @@ class StoryReaderOptions extends BaseUI {
     this.elements.defaultPitch.value = this.settings.tts.defaultPitch;
     this.elements.speedValue.textContent = this.settings.tts.defaultSpeed.toFixed(1);
     this.elements.pitchValue.textContent = this.settings.tts.defaultPitch.toFixed(1);
+    this.elements.defaultVolume.value = this.settings.tts.volume ?? 100;
+    this.elements.volumeValue.textContent = this.settings.tts.volume ?? 100;
 
     // Appearance Tab
     this.updateThemeSelection(this.settings.appearance.theme);

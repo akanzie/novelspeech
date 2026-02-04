@@ -12,13 +12,15 @@ const STORAGE = CONFIG.STORAGE_KEYS || {};
 const TTS = CONFIG.TTS_ENGINES || {};
 const MESSAGES = CONFIG.MESSAGES || {};
 class EventHandler {
-  constructor() {
+  constructor(options = {}) {
     this.messageHandlers = new Map(); // Không sử dụng hiện tại, giữ lại để mở rộng sau
     this.stateManager = null;        // Quản lý trạng thái đọc (dòng hiện tại, nội dung, settings...)
     this.ttsService = null;          // Dịch vụ Text-to-Speech
     this.logger = null;              // Logger service (quản lý log thống nhất)
 
-    this.init();
+    if (options.autoInit !== false) {
+      this.init();
+    }
   }
 
   /**
@@ -201,8 +203,32 @@ class EventHandler {
         throw new Error('Không tìm thấy tab đang hoạt động');
       }
 
+      // Chỉ xử lý khi đúng format chương: metruyencv.com/truyen/x/chuong-y
+      try {
+        const tab = await chrome.tabs.get(targetTabId);
+        if (!this.isTargetChapterUrl(tab?.url)) {
+          return { success: false, error: 'Chỉ hỗ trợ trang chương: metruyencv.com/truyen/x/chuong-y' };
+        }
+      } catch {
+        // ignore: nếu không get được tab thì vẫn thử tiếp
+      }
+
+      // Chỉ cho phép 1 tab đọc tại một thời điểm
+      // Nếu đang đọc ở tab khác thì từ chối để tránh 2 tab cùng play
+      const current = await this.stateManager.getState();
+      const inProgress = current?.status === (STATUS.LOADING || 'loading') ||
+        current?.status === (STATUS.PLAYING || 'playing') ||
+        current?.status === (STATUS.PAUSED || 'paused');
+      if (inProgress && current?.tabId && current.tabId !== targetTabId) {
+        return {
+          success: false,
+          error: `Đang đọc ở tab khác (tabId=${current.tabId}). Hãy dừng trước khi phát ở tab mới.`
+        };
+      }
+
       await this.stateManager.updateState({
-        status: STATUS.LOADING || 'loading'
+        status: STATUS.LOADING || 'loading',
+        tabId: targetTabId
       });
 
       const settings = await this.buildReadingSettings(data?.settings);
@@ -236,6 +262,7 @@ class EventHandler {
       const startLine = Math.min(Math.max(data?.startLine || 0, 0), Math.max(0, content.lines.length - 1));
       await this.stateManager.updateState({
         status: STATUS.PLAYING || 'playing',
+        tabId: targetTabId,
         chapterUrl: content.metadata.chapterUrl,
         chapterTitle: content.metadata.chapterTitle,
         storyTitle: content.metadata.storyTitle,
@@ -252,7 +279,26 @@ class EventHandler {
       return { success: true, contentLength: content.lines.length };
     } catch (error) {
       this.logger?.error('Lỗi khi bắt đầu đọc', { error: error?.message || String(error) });
+      try {
+        await this.stateManager?.updateState?.({
+          status: STATUS.ERROR || 'error',
+          tabId: null
+        });
+      } catch {
+        // ignore
+      }
       return { success: false, error: error.message };
+    }
+  }
+
+  isTargetChapterUrl(url = '') {
+    try {
+      const parsed = new URL(url);
+      if (!parsed.hostname.includes('metruyencv.com')) return false;
+      const path = parsed.pathname || '';
+      return /^\/truyen\/[^/]+\/chuong-\d+\/?$/i.test(path);
+    } catch {
+      return false;
     }
   }
 
@@ -291,23 +337,27 @@ class EventHandler {
     });
 
     // Phát giọng nói - await để đảm bảo hoàn thành trước khi return (nếu cần)
-    await this.ttsService.speak(currentLine, {
-      rate: state.settings?.rate || 1.0,
-      pitch: state.settings?.pitch || 1.0,
-      volume: state.settings?.volume || 1.0,
-      voice: state.settings?.voice,
-      useEdgeTTS: state.settings?.engine === (TTS.EDGE_TTS || 'edge'),
-      onStart: () => {
-        this.logger?.log('🎤 Bắt đầu đọc dòng', { lineIndex: state.currentLine + 1 });
-      },
-      onEnd: () => {
-        this.handleLineFinished();
-      },
-      onError: (error) => {
-        this.logger?.error('Lỗi TTS', { error });
-        this.stateManager.updateState({ status: STATUS.ERROR || 'error' });
-      }
-    });
+      await this.ttsService.speak(currentLine, {
+        rate: state.settings?.rate || 1.0,
+        pitch: state.settings?.pitch || 1.0,
+        volume: state.settings?.volume || 1.0,
+        voice: state.settings?.voice,
+        useEdgeTTS: state.settings?.engine === (TTS.EDGE_TTS || 'edge'),
+        onStart: () => {
+          this.logger?.log('🎤 Bắt đầu đọc dòng', { lineIndex: state.currentLine + 1 });
+        },
+        onEnd: () => {
+          this.handleLineFinished();
+        },
+        onError: (error) => {
+          const message = String(error?.message || error || '');
+          if (message.toLowerCase().includes('interrupted')) {
+            return;
+          }
+          this.logger?.error('Lỗi TTS', { error });
+          this.stateManager.updateState({ status: STATUS.ERROR || 'error' });
+        }
+      });
   }
 
   /**
@@ -336,6 +386,15 @@ class EventHandler {
    */
   async handleLineFinished() {
     const state = await this.stateManager.getState();
+
+    // Nếu user đã pause/stop trong lúc TTS vẫn đang chạy, callback onEnd có thể đến muộn.
+    // Chỉ tiếp tục đọc khi state hiện tại đang PLAYING.
+    if (state?.status !== (STATUS.PLAYING || 'playing')) {
+      this.logger?.debug?.('Bỏ qua handleLineFinished vì không ở trạng thái playing', {
+        status: state?.status
+      });
+      return;
+    }
     const nextLine = state.currentLine + 1;
 
     if (nextLine < state.totalLines) {
@@ -366,13 +425,22 @@ class EventHandler {
   /** Tạm dừng đọc */
   async handlePauseReading() {
     try {
-      const paused = this.ttsService.pause();
-      if (paused) {
-        await this.stateManager.updateState({ status: STATUS.PAUSED || 'paused' });
+      const state = await this.stateManager.getState();
+      if (state?.status === (STATUS.PAUSED || 'paused')) {
         return { success: true, status: STATUS.PAUSED || 'paused' };
       }
-      await this.stateManager.updateState({ status: STATUS.ERROR || 'error' });
-      return { success: false, error: 'Không thể tạm dừng' };
+      if (state?.status !== (STATUS.PLAYING || 'playing')) {
+        return { success: false, error: 'Không ở trạng thái đang đọc' };
+      }
+
+      const paused = this.ttsService.pause();
+      if (!paused) {
+        // Không set ERROR ở đây vì có thể do user bấm nhanh (đã pause/stop trước đó).
+        return { success: false, error: 'Không thể tạm dừng' };
+      }
+
+      await this.stateManager.updateState({ status: STATUS.PAUSED || 'paused' });
+      return { success: true, status: STATUS.PAUSED || 'paused' };
     } catch (error) {
       this.logger?.error('Lỗi khi tạm dừng đọc', { error });
       return { success: false, error: error.message };
@@ -382,12 +450,22 @@ class EventHandler {
   /** Tiếp tục đọc */
   async handleResumeReading() {
     try {
-      const resumed = this.ttsService.resume();
-      if (resumed) {
-        await this.stateManager.updateState({ status: STATUS.PLAYING || 'playing' });
+      const state = await this.stateManager.getState();
+      if (state?.status === (STATUS.PLAYING || 'playing')) {
         return { success: true, status: STATUS.PLAYING || 'playing' };
       }
-      return { success: false, error: 'Không thể tiếp tục' };
+      if (state?.status !== (STATUS.PAUSED || 'paused')) {
+        return { success: false, error: 'Không ở trạng thái tạm dừng' };
+      }
+
+      const resumed = this.ttsService.resume();
+      if (!resumed) {
+        // Không set ERROR ở đây vì có thể do user bấm nhanh / provider đang chuyển trạng thái.
+        return { success: false, error: 'Không thể tiếp tục' };
+      }
+
+      await this.stateManager.updateState({ status: STATUS.PLAYING || 'playing' });
+      return { success: true, status: STATUS.PLAYING || 'playing' };
     } catch (error) {
       this.logger?.error('Lỗi khi tiếp tục đọc', { error });
       return { success: false, error: error.message };
@@ -397,16 +475,14 @@ class EventHandler {
   /** Dừng đọc hoàn toàn */
   async handleStopReading() {
     try {
-      const stopped = this.ttsService.stop();
-      if (stopped) {
-        await this.stateManager.updateState({
-          status: STATUS.STOPPED || 'stopped',
-          currentLine: 0,
-          autoContinue: false
-        });
-        return { success: true, status: STATUS.STOPPED || 'stopped' };
-      }
-      return { success: false, error: 'Không thể dừng' };
+      this.ttsService.stop();
+      await this.stateManager.updateState({
+        status: STATUS.STOPPED || 'stopped',
+        tabId: null,
+        currentLine: 0,
+        autoContinue: false
+      });
+      return { success: true, status: STATUS.STOPPED || 'stopped' };
     } catch (error) {
       this.logger?.error('Lỗi khi dừng đọc', { error });
       return { success: false, error: error.message };
@@ -800,6 +876,7 @@ class EventHandler {
       this.ttsService.stop();
       await this.stateManager.updateState({
         status: STATUS.STOPPED || 'stopped',
+        tabId,
         currentLine: 0,
         totalLines: 0,
         content: [],
@@ -820,6 +897,13 @@ class EventHandler {
    * Lấy ID của tab đang active trong cửa sổ hiện tại
    */
   async getActiveTabId() {
+    try {
+      const state = await this.stateManager?.getState?.();
+      if (state?.tabId) return state.tabId;
+    } catch {
+      // ignore
+    }
+
     return new Promise((resolve) => {
       chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
         resolve(tabs[0]?.id || null);

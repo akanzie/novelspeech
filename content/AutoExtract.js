@@ -16,8 +16,23 @@
     }
 
     start() {
-      this.autoExtractOnLoad();
+      if (this.isTargetChapterUrl(window.location.href)) {
+        this.autoExtractOnLoad();
+      } else {
+        this._log('Bo qua auto-extract (khong phai trang chuong)', 'DEBUG', { url: window.location.href });
+      }
       this.applyStoredAppearance();
+    }
+
+    isTargetChapterUrl(url = '') {
+      try {
+        const parsed = new URL(url);
+        if (!parsed.hostname.includes('metruyencv.com')) return false;
+        const path = parsed.pathname || '';
+        return /^\/truyen\/[^/]+\/chuong-\d+\/?$/i.test(path);
+      } catch {
+        return false;
+      }
     }
 
     async autoExtractOnLoad() {

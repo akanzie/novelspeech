@@ -8,7 +8,6 @@
     "alarms",
     "offscreen",
     "storage",
-    "sidePanel",
     "tts",
     "tabs",
     "webNavigation"
@@ -63,9 +62,6 @@
   "action": {
     "default_popup": "ui/popup/popup.html",
     "default_title": "NovelSpeech"
-  },
-  "side_panel": {
-    "default_path": "ui/sidepanel/sidepanel.html"
   },
   "options_page": "ui/options/options.html"
 }

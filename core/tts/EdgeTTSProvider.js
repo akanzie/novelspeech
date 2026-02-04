@@ -146,6 +146,11 @@ class EdgeTTSProvider {
       return;
     } catch (error) {
       this.isSpeaking = false;
+      const message = String(error?.message || error || '');
+      // "interrupted" thường xảy ra khi user pause/stop -> bỏ qua như hành vi bình thường
+      if (message.toLowerCase().includes('interrupted')) {
+        return;
+      }
       settings.onError(error);
       return Promise.reject(error);
     }

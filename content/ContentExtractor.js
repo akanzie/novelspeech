@@ -118,6 +118,7 @@
       this.log(`Tim thay container: ${container.tagName}${container.className ? '.' + container.className : ''}`);
 
       const clone = container.cloneNode(true);
+      this.attachSourceCanvases(container, clone);
       this.cleanContainer(clone);
 
       const hasCanvas = clone.querySelectorAll('canvas').length > 0;
@@ -158,6 +159,18 @@
     buildTextBlocks(container) {
       if (!this.ocrPipeline) return [];
       return this.ocrPipeline.buildTextBlocks(container);
+    }
+
+    attachSourceCanvases(original, clone) {
+      try {
+        const originals = Array.from(original.querySelectorAll('canvas'));
+        const clones = Array.from(clone.querySelectorAll('canvas'));
+        clones.forEach((canvas, index) => {
+          canvas.__novelSpeechSourceCanvas = originals[index] || null;
+        });
+      } catch (error) {
+        this.log('Gan source canvas that bai', 'warn', { error });
+      }
     }
 
     // ============ TEXT PROCESSING ============

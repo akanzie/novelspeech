@@ -45,9 +45,22 @@
 
         const tag = node.tagName?.toLowerCase();
         if (tag === 'canvas') {
-          const area = node.width * node.height;
+          const dims = this.getCanvasDimensions(node);
+          const area = dims.width * dims.height;
           if (area >= settings.minCanvasArea) {
+            this.log?.('OCR canvas bat dau', 'info', {
+              width: dims.width,
+              height: dims.height,
+              area,
+              minCanvasArea: settings.minCanvasArea
+            });
             const text = await this.ocrCanvas(node, settings);
+            this.log?.('OCR canvas xong', 'info', {
+              width: dims.width,
+              height: dims.height,
+              area,
+              textPreview: (text || '').slice(0, 120)
+            });
             if (text) {
               blocks.push({
                 id: `ocr-${index++}`,
@@ -55,6 +68,13 @@
                 content: text
               });
             }
+          } else {
+            this.log?.('Bo qua canvas nho', 'info', {
+              width: dims.width,
+              height: dims.height,
+              area,
+              minCanvasArea: settings.minCanvasArea
+            });
           }
           return;
         }
@@ -102,12 +122,19 @@
 
     async ocrCanvas(canvas, settings) {
       if (!this.ocr) return '';
-      return this.ocr.recognizeCanvas(canvas, settings);
+      const source = canvas?.__novelSpeechSourceCanvas || canvas;
+      return this.ocr.recognizeCanvas(source, settings);
     }
 
     async ocrImage(img, settings) {
       if (!this.ocr) return '';
       return this.ocr.recognizeImage(img, settings);
+    }
+
+    getCanvasDimensions(canvas) {
+      const width = canvas?.width || canvas?.getBoundingClientRect?.().width || 0;
+      const height = canvas?.height || canvas?.getBoundingClientRect?.().height || 0;
+      return { width, height };
     }
   }
 

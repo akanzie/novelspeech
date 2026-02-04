@@ -99,6 +99,9 @@ class EventHandler {
         case MESSAGES.EXTRACT_CONTENT || 'extractContent':
           response = await this.handleExtractContent(sender.tab?.id);
           break;
+        case MESSAGES.CONTENT_EXTRACTED || 'contentExtracted':
+          response = await this.handleContentExtracted(message.data, sender.tab?.id);
+          break;
         case MESSAGES.HIGHLIGHT_LINE || 'highlightLine':
           response = await this.handleHighlightLine(message.data, sender.tab?.id);
           break;
@@ -206,6 +209,7 @@ class EventHandler {
         status: STATUS.PLAYING || 'playing',
         chapterUrl: content.metadata.chapterUrl,
         chapterTitle: content.metadata.chapterTitle,
+        storyTitle: content.metadata.storyTitle,
         content: content.lines,
         currentLine: data?.startLine || 0,
         totalLines: content.lines.length,
@@ -447,6 +451,44 @@ class EventHandler {
       return content;
     } catch (error) {
       this.logger?.error('Lỗi khi trích xuất nội dung', { error });
+      return { success: false, error: error.message };
+    }
+  }
+
+  /** Nhận thông báo đã trích xuất nội dung từ content script */
+  async handleContentExtracted(data = {}, tabId) {
+    try {
+      const updates = {};
+      if (data?.chapterUrl) updates.chapterUrl = data.chapterUrl;
+      if (data?.chapterTitle) updates.chapterTitle = data.chapterTitle;
+      if (data?.storyTitle) updates.storyTitle = data.storyTitle;
+      if (typeof data?.lineCount === 'number') {
+        updates.totalLines = data.lineCount;
+      } else if (typeof data?.totalLines === 'number') {
+        updates.totalLines = data.totalLines;
+      }
+
+      if (Object.keys(updates).length > 0) {
+        await this.stateManager.updateState(updates);
+      }
+
+      chrome.runtime.sendMessage({
+        type: MESSAGES.CONTENT_EXTRACTED || 'contentExtracted',
+        data: {
+          success: true,
+          metadata: {
+            chapterTitle: data?.chapterTitle || '',
+            storyTitle: data?.storyTitle || '',
+            chapterUrl: data?.chapterUrl || ''
+          },
+          lineCount: typeof data?.lineCount === 'number' ? data.lineCount : (data?.totalLines || 0),
+          totalLines: typeof data?.totalLines === 'number' ? data.totalLines : (data?.lineCount || 0)
+        }
+      });
+
+      return { success: true };
+    } catch (error) {
+      this.logger?.error('Lỗi khi nhận contentExtracted', { error });
       return { success: false, error: error.message };
     }
   }
@@ -737,7 +779,8 @@ class EventHandler {
         totalLines: 0,
         content: [],
         chapterUrl: url,
-        chapterTitle: ''
+        chapterTitle: '',
+        storyTitle: ''
       });
 
       await chrome.tabs.update(tabId, { url });

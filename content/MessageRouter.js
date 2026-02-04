@@ -93,6 +93,7 @@
           lines: result.lines,
           metadata: {
             chapterTitle: this.extractChapterTitle(),
+            storyTitle: this.extractStoryTitle(),
             chapterUrl: window.location.href,
             extractedAt: new Date().toISOString(),
             source: result.source,
@@ -188,33 +189,116 @@
         content: this.currentContent
       };
     }
-
     extractChapterTitle() {
-      const titleSelectors = [
+      const chapterRegex = /(Ch\w*ng|Chapter)\s*\d+/i;
+      const storyTitle = this.extractStoryTitle();
+      const isStoryTitle = (text) => {
+        if (!text || !storyTitle) return false;
+        return text.trim().toLowerCase() === storyTitle.trim().toLowerCase();
+      };
+
+      const strictSelectors = [
         '.chapter-title',
         '.chapter-name',
         '.title-chapter',
         'h1.chapter',
-        '.entry-title',
-        'header h1',
-        '.truyen-title',
-        'h1'
+        'h2'
       ];
 
-      for (const selector of titleSelectors) {
+      for (const selector of strictSelectors) {
         const element = document.querySelector(selector);
-        if (element && element.textContent.trim().length > 0) {
-          return element.textContent.trim();
+        const text = element?.textContent?.trim();
+        if (selector === '.chapter-title' && storyTitle && !chapterRegex.test(text)) {
+          continue;
+        }
+        if (text && text.length > 0 && !isStoryTitle(text)) {
+          return text;
         }
       }
 
-      const pageTitle = document.title;
-      const match = pageTitle.match(/(Chuong|Chapter)\s+\d+[:-\s]*(.+)/i);
-      if (match && match[2]) {
-        return match[2].trim();
+      const genericSelectors = [
+        '.entry-title',
+        'header h1',
+        'h1'
+      ];
+
+      for (const selector of genericSelectors) {
+        const element = document.querySelector(selector);
+        const text = element?.textContent?.trim();
+        if (!text || text.length === 0 || isStoryTitle(text)) {
+          continue;
+        }
+        if (chapterRegex.test(text)) {
+          return text;
+        }
+      }
+
+      const pageTitle = (document.title || '').trim();
+      const match = pageTitle.match(/(Ch\w*ng|Chapter)\s*\d+[:-\s]*(.+)/i);
+      if (match && match[0]) {
+        return match[0].trim();
+      }
+
+      const parsed = this.parseTitleFromDocument(pageTitle);
+      if (parsed.chapterTitle) {
+        return parsed.chapterTitle;
       }
 
       return document.title || 'Khong xac dinh';
+    }
+
+    extractStoryTitle() {
+      const chapterRegex = /(Ch\w*ng|Chapter)\s*\d+/i;
+      const storySelectors = [
+        '.truyen-title',
+        '.story-title',
+        '.book-title',
+        '.novel-title',
+        '.title-story',
+        '.story-name',
+        '.book-name',
+        '[itemprop="name"]',
+        'h1[itemprop="name"]'
+      ];
+
+      for (const selector of storySelectors) {
+        const element = document.querySelector(selector);
+        const text = element?.textContent?.trim();
+        if (text && text.length > 0 && !chapterRegex.test(text)) {
+          return text;
+        }
+      }
+
+      const pageTitle = (document.title || '').trim();
+      const parsed = this.parseTitleFromDocument(pageTitle);
+      if (parsed.storyTitle) {
+        return parsed.storyTitle;
+      }
+
+      return '';
+    }
+
+    parseTitleFromDocument(pageTitle) {
+      const title = (pageTitle || '').trim();
+      if (!title) return { storyTitle: '', chapterTitle: '' };
+
+      const chapterRegex = /(Ch\w*ng|Chapter)\s*\d+/i;
+      const parts = title.split(/[-??|]/).map(p => p.trim()).filter(Boolean);
+
+      if (parts.length >= 2) {
+        const chapterPart = parts.find(p => chapterRegex.test(p)) || '';
+        const storyPart = parts.find(p => p !== chapterPart) || '';
+        return {
+          storyTitle: storyPart,
+          chapterTitle: chapterPart
+        };
+      }
+
+      if (chapterRegex.test(title)) {
+        return { storyTitle: '', chapterTitle: title };
+      }
+
+      return { storyTitle: title, chapterTitle: '' };
     }
 
     async handleApplyAppearance(data = {}) {
@@ -339,6 +423,7 @@
         totalLines: this.currentContent.lines.length,
         currentHighlight: highlighted ? highlighted.lineIndex : -1,
         chapterTitle: this.currentContent.metadata.chapterTitle,
+        storyTitle: this.currentContent.metadata.storyTitle,
         chapterUrl: this.currentContent.metadata.chapterUrl
       };
     }

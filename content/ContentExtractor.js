@@ -78,7 +78,7 @@
 
       try {
         const result = await this.extractFromDOMWithOCR(settings);
-
+        this.log('Noi dung da duoc trich xuat', { text: result.text, length: result.text.length });
         if (result.text.length < 50) {
           throw new Error('Khong tim thay noi dung hop le');
         }

@@ -35,6 +35,7 @@
                 this.notify(MESSAGES.CONTENT_EXTRACTED || 'contentExtracted', {
                   chapterUrl: window.location.href,
                   chapterTitle: content.metadata.chapterTitle,
+                  storyTitle: content.metadata.storyTitle,
                   lineCount: content.lines.length
                 });
               }

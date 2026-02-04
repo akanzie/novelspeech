@@ -17,6 +17,7 @@ class StateManager {
       status: STATUS.STOPPED || 'stopped', // stopped, playing, paused, error, finished
       chapterUrl: '',
       chapterTitle: '',
+      storyTitle: '',
       currentLine: 0,
       totalLines: 0,
       content: [],
@@ -201,6 +202,7 @@ class StateManager {
       status: STATUS.STOPPED || 'stopped',
       chapterUrl: '',
       chapterTitle: '',
+      storyTitle: '',
       currentLine: 0,
       totalLines: 0,
       content: [],
@@ -228,6 +230,7 @@ class StateManager {
         const historyEntry = {
           chapterUrl: this.state.chapterUrl,
           chapterTitle: this.state.chapterTitle || 'Không có tiêu đề',
+          storyTitle: this.state.storyTitle || '',
           currentLine: this.state.currentLine,
           totalLines: this.state.totalLines,
           progress: this.state.totalLines > 0

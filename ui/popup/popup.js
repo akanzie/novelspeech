@@ -19,6 +19,7 @@
         currentLine: 0,
         totalLines: 0,
         chapterTitle: 'Chưa phát hiện chương truyện',
+        storyTitle: '',
         settings: { ...DEFAULT_RUNTIME_SETTINGS }
       };
 
@@ -33,7 +34,8 @@
         statusText: document.querySelector('.status-text'),
 
         // Chapter Info
-        chapterTitle: document.querySelector('.chapter-title'),
+        storyTitle: document.getElementById('storyTitle'),
+        chapterTitle: document.getElementById('chapterTitle'),
         btnPrevChapter: document.getElementById('btnPrevChapter'),
         btnNextChapter: document.getElementById('btnNextChapter'),
         btnResume: document.getElementById('btnResume'),
@@ -303,8 +305,12 @@
 
     updateUI() {
       // Update chapter info
+      if (this.elements.storyTitle) {
+        this.elements.storyTitle.textContent = this.state.storyTitle || 'Chưa phát hiện tên truyện';
+      }
+
       if (this.elements.chapterTitle) {
-        this.elements.chapterTitle.textContent = this.state.chapterTitle;
+        this.elements.chapterTitle.textContent = this.state.chapterTitle || 'Chưa phát hiện chương truyện';
       }
 
       if (this.elements.currentLineEl) {
@@ -491,6 +497,7 @@
 
         this.state.currentLine = state.currentLine || 0;
         this.state.chapterTitle = state.chapterTitle || this.state.chapterTitle;
+        this.state.storyTitle = state.storyTitle || this.state.storyTitle;
 
         const response = await this.startReading();
         if (response?.success) {
@@ -650,11 +657,15 @@
     }
 
     onContentExtracted(data) {
-      if (data.success) {
-        this.state.chapterTitle = data.metadata?.chapterTitle || 'Chương truyện';
-        this.state.totalLines = data.lines?.length || 0;
-        this.updateUI();
+      if (!data || data.success === false) return;
 
+      this.state.chapterTitle = data.metadata?.chapterTitle || 'Chương truyện';
+      this.state.storyTitle = data.metadata?.storyTitle || '';
+      const totalLines = data.lines?.length ?? data.lineCount ?? data.totalLines ?? 0;
+      this.state.totalLines = totalLines;
+      this.updateUI();
+
+      if (data.success) {
         this.services.showNotification(`Đã trích xuất ${this.state.totalLines} dòng`, 'success');
       }
     }

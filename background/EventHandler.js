@@ -258,9 +258,6 @@ class EventHandler {
       preview: currentPreview
     });
 
-    // Highlight trước khi phát giọng để người dùng thấy ngay dòng đang đọc
-    await this.highlightCurrentLine();
-
     // Phát giọng nói - await để đảm bảo hoàn thành trước khi return (nếu cần)
     await this.ttsService.speak(currentLine, {
       rate: state.settings?.rate || 1.0,
@@ -495,22 +492,7 @@ class EventHandler {
 
   /** Highlight dòng chỉ định (thường dùng để đồng bộ) */
   async handleHighlightLine(data, tabId) {
-    if (!tabId) return { success: false, error: 'Không có ID tab' };
-
-    try {
-      chrome.tabs.sendMessage(tabId, {
-        type: MESSAGES.HIGHLIGHT_LINE || 'highlightLine',
-        data: {
-          ...data,
-          autoScroll: data?.autoScroll ?? true,
-          highlight: data?.highlight ?? true
-        }
-      });
-      return { success: true };
-    } catch (error) {
-      this.logger?.error('Lỗi khi highlight dòng', { error });
-      return { success: false, error: error.message };
-    }
+    return { success: false, error: 'Highlight/scroll đã bị tắt' };
   }
 
   /** Đồng bộ trạng thái từ bên ngoài (ví dụ: popup mở lại) */

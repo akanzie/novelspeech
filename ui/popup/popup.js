@@ -62,8 +62,6 @@
         volumeValue: document.getElementById('volumeValue'),
 
         // Features
-        autoScrollToggle: document.getElementById('autoScrollToggle'),
-        highlightToggle: document.getElementById('highlightToggle'),
         darkModeToggle: document.getElementById('darkModeToggle'),
 
         // Menu
@@ -101,12 +99,6 @@
       );
 
       // Features
-      this.elements.autoScrollToggle.addEventListener('change',
-        (e) => this.onToggleChange('autoScroll', e.target.checked)
-      );
-      this.elements.highlightToggle.addEventListener('change',
-        (e) => this.onToggleChange('highlight', e.target.checked)
-      );
       this.elements.darkModeToggle.addEventListener('change',
         (e) => this.onDarkModeToggle(e.target.checked)
       );
@@ -285,12 +277,6 @@
       await this.sendCommand(MESSAGES.UPDATE_SETTINGS || 'updateSettings', { voice: e.target.value });
     }
 
-    async onToggleChange(setting, value) {
-      this.state.settings[setting] = value;
-      await this.saveSettings();
-      await this.sendCommand(MESSAGES.UPDATE_SETTINGS || 'updateSettings', { [setting]: value });
-    }
-
     async onDarkModeToggle(isDark) {
       this.services.setTheme(isDark ? 'dark' : 'light');
       localStorage.setItem('darkMode', isDark);
@@ -392,13 +378,6 @@
         this.elements.voiceSelect.value = this.state.settings.voice;
       }
 
-      if (this.elements.autoScrollToggle) {
-        this.elements.autoScrollToggle.checked = this.state.settings.autoScroll;
-      }
-
-      if (this.elements.highlightToggle) {
-        this.elements.highlightToggle.checked = this.state.settings.highlight;
-      }
     }
 
     updateResumeButtonState() {
@@ -499,14 +478,7 @@
         this.state.chapterTitle = state.chapterTitle || this.state.chapterTitle;
         this.state.storyTitle = state.storyTitle || this.state.storyTitle;
 
-        const response = await this.startReading();
-        if (response?.success) {
-          await this.sendCommand(MESSAGES.HIGHLIGHT_LINE || 'highlightLine', {
-            lineIndex: this.state.currentLine,
-            autoScroll: true,
-            highlight: this.state.settings.highlight !== false
-          });
-        }
+        await this.startReading();
       } catch (error) {
         this.handleError(error, 'resumeFromLastPosition');
       }

@@ -13,6 +13,8 @@
         ocrLanguage: 'vie',
         useOCR: true,
         useOCRImages: true,
+        ocrProvider: 'tesseract',
+        ocrApiUrl: '',
         cacheOCR: true,
         maxCacheSize: 100,
         minCanvasArea: 1500,

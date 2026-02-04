@@ -42,17 +42,11 @@
           case MESSAGES.EXTRACT_CONTENT || 'extractContent':
             response = await this.handleExtractContent(message.data);
             break;
-          case MESSAGES.HIGHLIGHT_LINE || 'highlightLine':
-            response = await this.handleHighlightLine(message.data);
-            break;
           case MESSAGES.APPLY_APPEARANCE || 'applyAppearance':
             response = await this.handleApplyAppearance(message.data);
             break;
           case MESSAGES.GET_CHAPTER_LINKS || 'getChapterLinks':
             response = await this.handleGetChapterLinks();
-            break;
-          case MESSAGES.CLEAR_HIGHLIGHT || 'clearHighlight':
-            response = await this.handleClearHighlight();
             break;
           case MESSAGES.MAP_CONTENT || 'mapContent':
             response = await this.handleMapContent(message.data);
@@ -122,46 +116,6 @@
 
     async extractContent(options = {}) {
       return this.handleExtractContent(options);
-    }
-
-    async handleHighlightLine(data) {
-      try {
-        if (!this.currentContent) {
-          throw new Error('No content available. Extract content first.');
-        }
-
-        const { lineIndex, lineText, autoScroll, highlight } = data;
-        const text = lineText || this.currentContent.lines[lineIndex];
-        if (!text) {
-          throw new Error(`Line ${lineIndex} not found in content`);
-        }
-
-        const success = await this.domController.highlightLine(lineIndex, text, {
-          autoScroll,
-          highlight
-        });
-
-        return {
-          success,
-          lineIndex,
-          lineText: text.substring(0, 100) + (text.length > 100 ? '...' : '')
-        };
-      } catch (error) {
-        this._log('Loi highlight dong', 'ERROR', { error });
-        return {
-          success: false,
-          error: error.message
-        };
-      }
-    }
-
-    async handleClearHighlight() {
-      try {
-        this.domController.clearAll();
-        return { success: true };
-      } catch (error) {
-        return { success: false, error: error.message };
-      }
     }
 
     async handleMapContent(data) {
@@ -417,11 +371,10 @@
 
     getReadingProgress() {
       if (!this.currentContent) return null;
-      const highlighted = this.domController.currentHighlight;
       return {
         hasContent: !!this.currentContent,
         totalLines: this.currentContent.lines.length,
-        currentHighlight: highlighted ? highlighted.lineIndex : -1,
+        currentHighlight: -1,
         chapterTitle: this.currentContent.metadata.chapterTitle,
         storyTitle: this.currentContent.metadata.storyTitle,
         chapterUrl: this.currentContent.metadata.chapterUrl

@@ -84,8 +84,6 @@
         }
         if (settings?.appearance && this.domController?.updateAppearance) {
           this.domController.updateAppearance({
-            highlightColor: settings.appearance.highlightColor,
-            highlightOpacity: settings.appearance.highlightOpacity,
             fontSize: settings.appearance.fontSize
           });
         }

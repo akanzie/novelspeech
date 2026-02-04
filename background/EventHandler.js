@@ -127,9 +127,6 @@ class EventHandler {
         case MESSAGES.CONTENT_EXTRACTED || 'contentExtracted':
           response = await this.handleContentExtracted(message.data, sender.tab?.id);
           break;
-        case MESSAGES.HIGHLIGHT_LINE || 'highlightLine':
-          response = await this.handleHighlightLine(message.data, sender.tab?.id);
-          break;
         case MESSAGES.SYNC_STATE || 'syncState':
           response = await this.handleSyncState(message.data);
           break;
@@ -315,7 +312,7 @@ class EventHandler {
   }
 
   /**
-   * Bắt đầu đọc dòng hiện tại bằng TTS và highlight dòng tương ứng
+   * Bắt đầu đọc dòng hiện tại bằng TTS
    */
   async startReadingFromCurrentLine() {
     const state = await this.stateManager.getState();
@@ -358,26 +355,6 @@ class EventHandler {
           this.stateManager.updateState({ status: STATUS.ERROR || 'error' });
         }
       });
-  }
-
-  /**
-   * Gửi lệnh highlight dòng hiện tại tới content script
-   * (fire-and-forget - không cần await response vì không ảnh hưởng logic chính)
-   */
-  async highlightCurrentLine() {
-    const state = await this.stateManager.getState();
-    const tabId = await this.getActiveTabId();
-
-    if (tabId) {
-      chrome.tabs.sendMessage(tabId, {
-        type: MESSAGES.HIGHLIGHT_LINE || 'highlightLine',
-        data: {
-          lineIndex: state.currentLine,
-          autoScroll: state.settings?.autoScroll !== false,
-          highlight: state.settings?.highlight !== false
-        }
-      });
-    }
   }
 
   /**
@@ -609,11 +586,6 @@ class EventHandler {
     }
   }
 
-  /** Highlight dòng chỉ định (thường dùng để đồng bộ) */
-  async handleHighlightLine(data, tabId) {
-    return { success: false, error: 'Highlight/scroll đã bị tắt' };
-  }
-
   /** Đồng bộ trạng thái từ bên ngoài (ví dụ: popup mở lại) */
   async handleSyncState(data) {
     try {
@@ -636,14 +608,12 @@ class EventHandler {
         }
       });
 
-      // Áp dụng style cho content (highlight)
+      // Áp dụng style cho content
       const tabId = await this.getActiveTabId();
       if (tabId) {
         chrome.tabs.sendMessage(tabId, {
           type: MESSAGES.APPLY_APPEARANCE || 'applyAppearance',
           data: {
-            highlightColor: normalized.highlightColor,
-            highlightOpacity: normalized.highlightOpacity,
             fontSize: normalized.fontSize
           }
         });
@@ -768,12 +738,10 @@ class EventHandler {
         pitch: settings.tts?.defaultPitch ?? 1.0,
         volume: this.normalizeVolume(settings.tts?.volume ?? 100),
         voice: settings.tts?.defaultVoice,
-        autoScroll: settings.general?.autoScroll ?? true,
-        highlight: settings.general?.highlight ?? true,
-        highlightColor: settings.appearance?.highlightColor,
-        highlightOpacity: settings.appearance?.highlightOpacity,
         fontSize: settings.appearance?.fontSize,
         ocrLanguage: settings.advanced?.ocrLanguage,
+        ocrProvider: settings.advanced?.ocrProvider,
+        ocrApiUrl: settings.advanced?.ocrApiUrl,
         cacheOCRResults: settings.advanced?.cacheOCRResults,
         maxCacheSize: settings.advanced?.maxCacheSize,
         enableDebug: settings.advanced?.enableDebug
@@ -786,9 +754,7 @@ class EventHandler {
       rate: settings.rate ?? 1.0,
       pitch: settings.pitch ?? 1.0,
       volume: this.normalizeVolume(settings.volume ?? 1.0),
-      voice: settings.voice,
-      autoScroll: settings.autoScroll ?? true,
-      highlight: settings.highlight ?? true
+      voice: settings.voice
     };
   }
 
@@ -815,6 +781,8 @@ class EventHandler {
     const normalized = this.normalizeSettings(stored || {});
     return {
       ocrLanguage: normalized.ocrLanguage,
+      ocrProvider: normalized.ocrProvider,
+      ocrApiUrl: normalized.ocrApiUrl,
       cacheOCR: normalized.cacheOCRResults,
       maxCacheSize: normalized.maxCacheSize,
       debug: normalized.enableDebug

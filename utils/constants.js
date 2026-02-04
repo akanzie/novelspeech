@@ -33,7 +33,6 @@
       UPDATE_SETTINGS: 'updateSettings',
       GET_STATE: 'getState',
       EXTRACT_CONTENT: 'extractContent',
-      HIGHLIGHT_LINE: 'highlightLine',
       SYNC_STATE: 'syncState',
       SETTINGS_UPDATED: 'settingsUpdated',
       PREV_CHAPTER: 'prevChapter',
@@ -43,7 +42,6 @@
       LOG: 'log',
       APPLY_APPEARANCE: 'applyAppearance',
       GET_CHAPTER_LINKS: 'getChapterLinks',
-      CLEAR_HIGHLIGHT: 'clearHighlight',
       MAP_CONTENT: 'mapContent',
       GET_CONTENT: 'getContent',
       PING: 'ping',
@@ -51,24 +49,13 @@
       CONTENT_EXTRACTED: 'contentExtracted',
       STATE_UPDATE: 'stateUpdate',
       NOTIFICATION: 'notification',
-      CHAPTER_UPDATED: 'chapterUpdated',
-      HISTORY_UPDATED: 'historyUpdated',
-      BOOKMARK_ADDED: 'bookmarkAdded',
-      ADD_BOOKMARK: 'addBookmark',
-      GO_TO_BOOKMARK: 'goToBookmark',
-      DELETE_BOOKMARK: 'deleteBookmark',
-      CLEAR_HISTORY: 'clearHistory',
-      EXPORT_LOGS: 'exportLogs',
       DATA_CLEARED: 'dataCleared'
     },
     DEFAULT_SETTINGS: {
       general: {
-        autoStart: false,
         autoNextChapter: false,
         saveHistory: true,
-        pageLoadTimeout: 10,
-        autoScroll: true,
-        highlight: true
+        pageLoadTimeout: 10
       },
       tts: {
         engine: 'edge',
@@ -79,12 +66,12 @@
       },
       appearance: {
         theme: 'auto',
-        highlightColor: '#ffeb3b',
-        highlightOpacity: 0.3,
         fontSize: 14
       },
       advanced: {
         ocrLanguage: 'vie',
+        ocrProvider: 'tesseract',
+        ocrApiUrl: '',
         cacheOCRResults: true,
         enableDebug: false,
         maxCacheSize: 100
@@ -95,9 +82,7 @@
       rate: 1.0,
       pitch: 1.0,
       volume: 1.0,
-      voice: 'vi-VN-HoaiMyNeural',
-      autoScroll: true,
-      highlight: true
+      voice: 'vi-VN-HoaiMyNeural'
     }
   };
 

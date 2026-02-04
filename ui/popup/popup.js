@@ -518,9 +518,7 @@
           rate: settings.tts?.defaultSpeed ?? 1.0,
           pitch: settings.tts?.defaultPitch ?? 1.0,
           volume: settings.tts?.volume ?? 1.0,
-          voice: settings.tts?.defaultVoice,
-          autoScroll: settings.general?.autoScroll ?? true,
-          highlight: settings.general?.highlight ?? true
+          voice: settings.tts?.defaultVoice
         };
       }
 

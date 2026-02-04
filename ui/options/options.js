@@ -27,11 +27,8 @@ class StoryReaderOptions extends BaseUI {
       tabContents: document.querySelectorAll('.tab-content'),
 
       // General Tab
-      autoStart: document.getElementById('autoStart'),
       autoNextChapter: document.getElementById('autoNextChapter'),
       saveHistory: document.getElementById('saveHistory'),
-      autoScroll: document.getElementById('autoScroll'),
-      highlight: document.getElementById('highlight'),
       pageLoadTimeout: document.getElementById('pageLoadTimeout'),
 
       // TTS Tab
@@ -46,11 +43,11 @@ class StoryReaderOptions extends BaseUI {
 
       // Appearance Tab
       themeOptions: document.querySelectorAll('.theme-option'),
-      highlightColor: document.getElementById('highlightColor'),
-      highlightOpacity: document.getElementById('highlightOpacity'),
       fontSize: document.getElementById('fontSize'),
 
       // Advanced Tab
+      ocrProvider: document.getElementById('ocrProvider'),
+      ocrApiUrl: document.getElementById('ocrApiUrl'),
       ocrLanguage: document.getElementById('ocrLanguage'),
       cacheOCRResults: document.getElementById('cacheOCRResults'),
       enableDebug: document.getElementById('enableDebug'),
@@ -85,20 +82,11 @@ class StoryReaderOptions extends BaseUI {
     });
 
     // General Tab - with debounce
-    this.elements.autoStart.addEventListener('change',
-      this.debounce(() => this.onGeneralSettingChange('autoStart', this.elements.autoStart.checked), 300)
-    );
     this.elements.autoNextChapter.addEventListener('change',
       this.debounce(() => this.onGeneralSettingChange('autoNextChapter', this.elements.autoNextChapter.checked), 300)
     );
     this.elements.saveHistory.addEventListener('change',
       this.debounce(() => this.onGeneralSettingChange('saveHistory', this.elements.saveHistory.checked), 300)
-    );
-    this.elements.autoScroll.addEventListener('change',
-      this.debounce(() => this.onGeneralSettingChange('autoScroll', this.elements.autoScroll.checked), 300)
-    );
-    this.elements.highlight.addEventListener('change',
-      this.debounce(() => this.onGeneralSettingChange('highlight', this.elements.highlight.checked), 300)
     );
     this.elements.pageLoadTimeout.addEventListener('change',
       this.debounce(() => this.onGeneralSettingChange('pageLoadTimeout', parseInt(this.elements.pageLoadTimeout.value)), 300)
@@ -135,17 +123,17 @@ class StoryReaderOptions extends BaseUI {
       });
     });
 
-    this.elements.highlightColor.addEventListener('change',
-      this.debounce(() => this.onAppearanceSettingChange('highlightColor', this.elements.highlightColor.value), 300)
-    );
-    this.elements.highlightOpacity.addEventListener('input',
-      this.throttle(() => this.onAppearanceSettingChange('highlightOpacity', parseFloat(this.elements.highlightOpacity.value)), 300)
-    );
     this.elements.fontSize.addEventListener('change',
       this.debounce(() => this.onAppearanceSettingChange('fontSize', parseInt(this.elements.fontSize.value)), 300)
     );
 
     // Advanced Tab
+    this.elements.ocrProvider.addEventListener('change',
+      this.debounce(() => this.onAdvancedSettingChange('ocrProvider', this.elements.ocrProvider.value), 300)
+    );
+    this.elements.ocrApiUrl.addEventListener('change',
+      this.debounce(() => this.onAdvancedSettingChange('ocrApiUrl', this.elements.ocrApiUrl.value.trim()), 300)
+    );
     this.elements.ocrLanguage.addEventListener('change',
       this.debounce(() => this.onAdvancedSettingChange('ocrLanguage', this.elements.ocrLanguage.value), 300)
     );
@@ -218,11 +206,8 @@ class StoryReaderOptions extends BaseUI {
 
   updateUI() {
     // General Tab
-    this.elements.autoStart.checked = this.settings.general.autoStart;
     this.elements.autoNextChapter.checked = this.settings.general.autoNextChapter;
     this.elements.saveHistory.checked = this.settings.general.saveHistory;
-    this.elements.autoScroll.checked = this.settings.general.autoScroll;
-    this.elements.highlight.checked = this.settings.general.highlight;
     this.elements.pageLoadTimeout.value = this.settings.general.pageLoadTimeout;
 
     // TTS Tab
@@ -237,11 +222,11 @@ class StoryReaderOptions extends BaseUI {
 
     // Appearance Tab
     this.updateThemeSelection(this.settings.appearance.theme);
-    this.elements.highlightColor.value = this.settings.appearance.highlightColor;
-    this.elements.highlightOpacity.value = this.settings.appearance.highlightOpacity;
     this.elements.fontSize.value = this.settings.appearance.fontSize;
 
     // Advanced Tab
+    this.elements.ocrProvider.value = this.settings.advanced.ocrProvider || 'tesseract';
+    this.elements.ocrApiUrl.value = this.settings.advanced.ocrApiUrl || '';
     this.elements.ocrLanguage.value = this.settings.advanced.ocrLanguage;
     this.elements.cacheOCRResults.checked = this.settings.advanced.cacheOCRResults;
     this.elements.enableDebug.checked = this.settings.advanced.enableDebug;

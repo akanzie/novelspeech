@@ -40,9 +40,7 @@
         "content/AutoExtract.js",
         "content/content.js"
       ],
-      "css": [
-        "content/styles/highlight.css"
-      ],
+      "css": [],
       "run_at": "document_idle"
     }
   ],

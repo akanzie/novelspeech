@@ -205,13 +205,14 @@ class EventHandler {
 
       // Bước 2: Cập nhật trạng thái với nội dung mới
       this.logger?.log('Bước 2: Đang cập nhật trạng thái đọc...');
+      const startLine = Math.min(Math.max(data?.startLine || 0, 0), Math.max(0, content.lines.length - 1));
       await this.stateManager.updateState({
         status: STATUS.PLAYING || 'playing',
         chapterUrl: content.metadata.chapterUrl,
         chapterTitle: content.metadata.chapterTitle,
         storyTitle: content.metadata.storyTitle,
         content: content.lines,
-        currentLine: data?.startLine || 0,
+        currentLine: startLine,
         totalLines: content.lines.length,
         settings
       });
@@ -247,6 +248,9 @@ class EventHandler {
 
     if (!state.content || state.currentLine >= state.content.length) {
       this.logger?.warn('Không có nội dung để đọc hoặc đã đến cuối chương');
+      await this.stateManager.updateState({
+        status: STATUS.FINISHED || 'finished'
+      });
       return;
     }
 
@@ -339,6 +343,7 @@ class EventHandler {
         await this.stateManager.updateState({ status: STATUS.PAUSED || 'paused' });
         return { success: true, status: STATUS.PAUSED || 'paused' };
       }
+      await this.stateManager.updateState({ status: STATUS.ERROR || 'error' });
       return { success: false, error: 'Không thể tạm dừng' };
     } catch (error) {
       this.logger?.error('Lỗi khi tạm dừng đọc', { error });
@@ -368,7 +373,8 @@ class EventHandler {
       if (stopped) {
         await this.stateManager.updateState({
           status: STATUS.STOPPED || 'stopped',
-          currentLine: 0
+          currentLine: 0,
+          autoContinue: false
         });
         return { success: true, status: STATUS.STOPPED || 'stopped' };
       }

@@ -11,6 +11,7 @@ class EdgeTTSProvider {
     this.currentVoice = null;
     this.edgeVoices = [];
     this.offscreenReady = false;
+    this.offscreenInitPromise = null;
     this.offscreenUrl = 'ui/offscreen/tts.html';
   }
 
@@ -202,17 +203,34 @@ class EdgeTTSProvider {
 
   async ensureOffscreen() {
     if (this.offscreenReady) return;
+    if (this.offscreenInitPromise) {
+      await this.offscreenInitPromise;
+      return;
+    }
+    this.offscreenInitPromise = this._initOffscreen();
+    await this.offscreenInitPromise;
+    this.offscreenInitPromise = null;
+  }
+
+  async _initOffscreen() {
     const offscreen = globalThis?.chrome?.offscreen;
     if (!offscreen?.createDocument) {
       throw new Error('Offscreen API is not available');
     }
     const hasDocument = await offscreen.hasDocument();
     if (!hasDocument) {
-      await offscreen.createDocument({
-        url: this.offscreenUrl,
-        reasons: ['AUDIO_PLAYBACK'],
-        justification: 'Text to speech playback'
-      });
+      try {
+        await offscreen.createDocument({
+          url: this.offscreenUrl,
+          reasons: ['AUDIO_PLAYBACK'],
+          justification: 'Text to speech playback'
+        });
+      } catch (error) {
+        const message = error?.message || String(error);
+        if (!message.includes('Only a single offscreen document may be created')) {
+          throw error;
+        }
+      }
     }
     await this.waitForOffscreenReady();
     this.offscreenReady = true;

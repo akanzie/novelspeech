@@ -61,7 +61,7 @@ class OCRProcessor {
 
   async ensureReady(settings = {}) {
     this.setConfig(settings);
-    if (String(this.config.ocrProvider || '').toLowerCase() === 'paddle') {
+    if (this.isApiProvider(this.config.ocrProvider)) {
       return true;
     }
     const ocrLang = this.normalizeOcrLanguage(this.config.ocrLanguage);
@@ -195,8 +195,12 @@ class OCRProcessor {
 
   async recognizeCanvas(canvas, settings = {}) {
     try {
-      if (String(settings.ocrProvider || this.config.ocrProvider || '').toLowerCase() === 'paddle') {
+      const provider = String(settings.ocrProvider || this.config.ocrProvider || '').toLowerCase();
+      if (provider === 'paddle') {
         return await this.recognizeCanvasByPaddle(canvas, settings);
+      }
+      if (provider === 'vietocr') {
+        return await this.recognizeCanvasByVietOcr(canvas, settings);
       }
       if (!(await this.ensureReady(settings))) return '';
       const cacheKey = this.getCanvasHash(canvas);
@@ -219,8 +223,12 @@ class OCRProcessor {
 
   async recognizeImage(img, settings = {}) {
     try {
-      if (String(settings.ocrProvider || this.config.ocrProvider || '').toLowerCase() === 'paddle') {
+      const provider = String(settings.ocrProvider || this.config.ocrProvider || '').toLowerCase();
+      if (provider === 'paddle') {
         return await this.recognizeImageByPaddle(img, settings);
+      }
+      if (provider === 'vietocr') {
+        return await this.recognizeImageByVietOcr(img, settings);
       }
       if (!(await this.ensureReady(settings))) return '';
       const cacheKey = this.getImageHash(img);
@@ -269,18 +277,26 @@ class OCRProcessor {
   }
 
   async recognizeCanvasByPaddle(canvas, settings = {}) {
-    const apiUrl = this.getPaddleApiUrl(settings);
+    const apiUrl = this.getApiUrl(settings);
     if (!apiUrl) {
       this.log('PaddleOCR API URL chua duoc cau hinh', {}, 'WARN');
       return '';
     }
+    this.log('PaddleOCR: goi API', { apiUrl, source: 'canvas' });
     const cacheKey = this.getCanvasHash(canvas);
     const shouldCache = settings.cacheOCR ?? this.config.cacheOCR;
     if (shouldCache) {
       const cached = this.getCachedOcr(cacheKey);
       if (cached) return cached;
     }
-    const imageBase64 = this.canvasToDataUrl(canvas);
+    const snapshot = this.getCanvasSnapshot(canvas);
+    const imageBase64 = snapshot || this.canvasToDataUrl(canvas);
+    this.log('PaddleOCR: payload', {
+      hasImageBase64: Boolean(imageBase64),
+      base64Prefix: String(imageBase64 || '').slice(0, 30),
+      base64Length: String(imageBase64 || '').length,
+      usedSnapshot: Boolean(snapshot)
+    });
     const text = await this.callPaddleOcr(apiUrl, {
       imageBase64,
       imageUrl: null,
@@ -293,11 +309,12 @@ class OCRProcessor {
   }
 
   async recognizeImageByPaddle(img, settings = {}) {
-    const apiUrl = this.getPaddleApiUrl(settings);
+    const apiUrl = this.getApiUrl(settings);
     if (!apiUrl) {
       this.log('PaddleOCR API URL chua duoc cau hinh', {}, 'WARN');
       return '';
     }
+    this.log('PaddleOCR: goi API', { apiUrl, source: 'image' });
     const cacheKey = this.getImageHash(img);
     const shouldCache = settings.cacheOCR ?? this.config.cacheOCR;
     if (shouldCache) {
@@ -306,6 +323,12 @@ class OCRProcessor {
     }
     const imageUrl = img?.src || img?.getAttribute?.('src') || '';
     const imageBase64 = await this.imageToDataUrl(img).catch(() => '');
+    this.log('PaddleOCR: payload', {
+      hasImageBase64: Boolean(imageBase64),
+      base64Prefix: String(imageBase64 || '').slice(0, 30),
+      base64Length: String(imageBase64 || '').length,
+      imageUrl: imageUrl || null
+    });
     const text = await this.callPaddleOcr(apiUrl, {
       imageBase64: imageBase64 || null,
       imageUrl: imageUrl || null,
@@ -317,7 +340,113 @@ class OCRProcessor {
     return text;
   }
 
-  getPaddleApiUrl(settings = {}) {
+  async recognizeCanvasByVietOcr(canvas, settings = {}) {
+    const apiUrl = this.getApiUrl(settings);
+    if (!apiUrl) {
+      this.log('VietOCR API URL chua duoc cau hinh', {}, 'WARN');
+      return '';
+    }
+    this.log('VietOCR: goi API', { apiUrl, source: 'canvas' });
+    const cacheKey = this.getCanvasHash(canvas);
+    const shouldCache = settings.cacheOCR ?? this.config.cacheOCR;
+    if (shouldCache) {
+      const cached = this.getCachedOcr(cacheKey);
+      if (cached) return cached;
+    }
+    const snapshot = this.getCanvasSnapshot(canvas);
+    const imageBase64 = snapshot || this.canvasToDataUrl(canvas);
+    this.log('VietOCR: payload', {
+      hasImageBase64: Boolean(imageBase64),
+      base64Prefix: String(imageBase64 || '').slice(0, 30),
+      base64Length: String(imageBase64 || '').length,
+      smart: true,
+      usedSnapshot: Boolean(snapshot)
+    });
+    const text = await this.callVietOcr(apiUrl, {
+      image_base64: imageBase64,
+      smart: true
+    });
+    if (text && shouldCache) {
+      this.setCachedOcr(cacheKey, text, this.config.maxCacheSize);
+    }
+    return text;
+  }
+
+  async recognizeImageByVietOcr(img, settings = {}) {
+    const apiUrl = this.getApiUrl(settings);
+    if (!apiUrl) {
+      this.log('VietOCR API URL chua duoc cau hinh', {}, 'WARN');
+      return '';
+    }
+    this.log('VietOCR: goi API', { apiUrl, source: 'image' });
+    const cacheKey = this.getImageHash(img);
+    const shouldCache = settings.cacheOCR ?? this.config.cacheOCR;
+    if (shouldCache) {
+      const cached = this.getCachedOcr(cacheKey);
+      if (cached) return cached;
+    }
+    const imageBase64 = await this.imageToDataUrl(img).catch(() => '');
+    this.log('VietOCR: payload', {
+      hasImageBase64: Boolean(imageBase64),
+      base64Prefix: String(imageBase64 || '').slice(0, 30),
+      base64Length: String(imageBase64 || '').length,
+      smart: true
+    });
+    const text = await this.callVietOcr(apiUrl, {
+      image_base64: imageBase64 || null,
+      smart: true
+    });
+    if (text && shouldCache) {
+      this.setCachedOcr(cacheKey, text, this.config.maxCacheSize);
+    }
+    return text;
+  }
+
+  async recognizeImageUrl(url, settings = {}) {
+    const provider = String(settings.ocrProvider || this.config.ocrProvider || '').toLowerCase();
+    if (!url) return '';
+    if (provider === 'paddle') {
+      const apiUrl = this.getApiUrl(settings);
+      if (!apiUrl) {
+        this.log('PaddleOCR API URL chua duoc cau hinh', {}, 'WARN');
+        return '';
+      }
+      const imageBase64 = await this.urlToDataUrl(url).catch(() => '');
+      this.log('PaddleOCR: payload (bg)', {
+        hasImageBase64: Boolean(imageBase64),
+        base64Prefix: String(imageBase64 || '').slice(0, 30),
+        base64Length: String(imageBase64 || '').length,
+        imageUrl: url || null
+      });
+      return await this.callPaddleOcr(apiUrl, {
+        imageBase64: imageBase64 || null,
+        imageUrl: url || null,
+        language: settings.ocrLanguage || this.config.ocrLanguage || 'vie'
+      });
+    }
+    if (provider === 'vietocr') {
+      const apiUrl = this.getApiUrl(settings);
+      if (!apiUrl) {
+        this.log('VietOCR API URL chua duoc cau hinh', {}, 'WARN');
+        return '';
+      }
+      const imageBase64 = await this.urlToDataUrl(url).catch(() => '');
+      this.log('VietOCR: payload (bg)', {
+        hasImageBase64: Boolean(imageBase64),
+        base64Prefix: String(imageBase64 || '').slice(0, 30),
+        base64Length: String(imageBase64 || '').length,
+        imageUrl: url || null
+      });
+      return await this.callVietOcr(apiUrl, {
+        image_base64: imageBase64 || null,
+        smart: true
+      });
+    }
+    this.log('OCR imageUrl chua ho tro cho provider nay', { provider }, 'WARN');
+    return '';
+  }
+
+  getApiUrl(settings = {}) {
     const url = settings.ocrApiUrl || this.config.ocrApiUrl || '';
     return String(url || '').trim();
   }
@@ -331,11 +460,24 @@ class OCRProcessor {
     }
   }
 
+  getCanvasSnapshot(canvas) {
+    const snapshot = canvas?.__novelSpeechSnapshot;
+    return typeof snapshot === 'string' ? snapshot : '';
+  }
+
   async imageToDataUrl(img) {
     const src = img?.src || img?.getAttribute?.('src') || '';
     if (!src) return '';
     if (src.startsWith('data:')) return src;
     const response = await fetch(src);
+    const blob = await response.blob();
+    return await this.blobToDataUrl(blob);
+  }
+
+  async urlToDataUrl(url) {
+    if (!url) return '';
+    if (url.startsWith('data:')) return url;
+    const response = await fetch(url);
     const blob = await response.blob();
     return await this.blobToDataUrl(blob);
   }
@@ -356,11 +498,33 @@ class OCRProcessor {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
+      if (!response.ok) {
+        this.log('PaddleOCR: HTTP error', { apiUrl, status: response.status, statusText: response.statusText }, 'WARN');
+      }
       const data = await response.json().catch(() => ({}));
       const text = this.extractTextFromOcrResponse(data);
       return (text || '').trim();
     } catch (error) {
-      this.log(`PaddleOCR that bai: ${error.message}`, { error }, 'WARN');
+      this.log(`PaddleOCR that bai: ${error.message}`, { error, apiUrl }, 'WARN');
+      return '';
+    }
+  }
+
+  async callVietOcr(apiUrl, payload = {}) {
+    try {
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (!response.ok) {
+        this.log('VietOCR: HTTP error', { apiUrl, status: response.status, statusText: response.statusText }, 'WARN');
+      }
+      const data = await response.json().catch(() => ({}));
+      const text = this.extractTextFromVietOcrResponse(data);
+      return (text || '').trim();
+    } catch (error) {
+      this.log(`VietOCR that bai: ${error.message}`, { error, apiUrl }, 'WARN');
       return '';
     }
   }
@@ -376,6 +540,21 @@ class OCRProcessor {
       return data.results.map(item => item?.text || '').filter(Boolean).join('\n');
     }
     return '';
+  }
+
+  extractTextFromVietOcrResponse(data) {
+    if (!data) return '';
+    if (typeof data.text === 'string') return data.text;
+    if (typeof data?.data?.text === 'string') return data.data.text;
+    if (data?.success === false && data?.error) {
+      this.log(`VietOCR error: ${data.error}`, { error: data.error }, 'WARN');
+    }
+    return '';
+  }
+
+  isApiProvider(provider) {
+    const value = String(provider || '').toLowerCase();
+    return value === 'paddle' || value === 'vietocr';
   }
 
   async loadCacheFromStorage() {
